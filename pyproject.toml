@@ -1,0 +1,17 @@
+[tool.pdm]
+
+[project]
+name = "eindir"
+version = "0.0.1"
+description = "A set of \"particles\" or components mainly focused on working with functions in ND."
+authors = [
+    {name = "Rohit Goswami", email = "rgoswami@ieee.org"},
+]
+dependencies = []
+requires-python = ">=3.11"
+readme = "README.md"
+license = {text = "MIT"}
+
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
