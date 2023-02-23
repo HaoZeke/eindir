@@ -7,6 +7,8 @@ import numpy as np
 import numpy.typing as npt
 import typing
 
+from eindir.core.exceptions import OutOfBounds
+
 @dataclass
 class FPair:
     """Class for handing position value pairs"""
