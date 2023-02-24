@@ -4,7 +4,7 @@ from matplotlib import cm
 from matplotlib.ticker import LinearLocator, FormatStrFormatter
 import numpy as np
 
-from eindir.core.components import ObjectiveFunction
+from eindir.core.components import ObjectiveFunction, FPair
 
 class Plot2dObj:
     """Meant to plot 2D objects"""
