@@ -1,6 +1,6 @@
 [project]
 name = "eindir"
-version = "0.0.2"
+version = "0.0.3"
 description = "A set of \"particles\" or components mainly focused on working with functions in ND."
 authors = [
     { name="Rohit Goswami", email="rgoswami@ieee.org" },
