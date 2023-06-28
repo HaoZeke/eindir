@@ -7,9 +7,60 @@ import numpy as np
 from eindir.core.components import ObjectiveFunction, FPair
 
 class Plot2dObj:
-    """Meant to plot 2D objects"""
+    """
+    Class for plotting 2D objective functions.
 
+    #### Description
+    This class is used to create 2D and 3D plots of an objective function. It
+    provides methods to prepare the values for the plot, and to create a 3D
+    surface plot or a 2D contour plot of the function.
+
+    #### Parameters
+    **obj** (`ObjectiveFunction`)
+    : An instance of the `ObjectiveFunction` class representing the function to
+    plot.
+
+    **nelem** (`int`)
+    : The number of elements in the plot.
+
+    #### Attributes
+    **func** (`ObjectiveFunction`)
+    : The function to plot.
+
+    **nelem** (`int`)
+    : The number of elements in the plot.
+
+    **X**, **Y**, **Z** (`npt.NDArray`)
+    : Arrays representing the X, Y, and Z coordinates for the plot.
+
+    **contourExtent** (`list` of `float`)
+    : The extent of the contour plot.
+
+    **X_glob_min**, **Y_glob_min**, **Z_glob_min** (`float`)
+    : The X, Y, and Z coordinates of the global minimum of the function.
+
+    **pdat** (`NoneType`)
+    : Placeholder for future data.
+
+    #### Notes
+    The `prepVals` method prepares the Z values for the plot.
+
+    The `create3d` method creates a 3D surface plot of the function.
+
+    The `createContour` method creates a 2D contour plot of the function.
+    """
     def __init__(self, obj: ObjectiveFunction, nelem: int):
+        """
+        Initializes an instance of the Plot2dObj class.
+
+        #### Parameters
+        **obj** (`ObjectiveFunction`)
+        : An instance of the `ObjectiveFunction` class representing the function
+        to plot.
+
+        **nelem** (`int`)
+        : The number of elements in the plot.
+        """
         self.func = obj
         self.nelem = nelem
         fll = self.func.limits.low
@@ -39,6 +90,13 @@ class Plot2dObj:
         self.pdat = None
 
     def prepVals(self):
+        """
+        Prepares the Z values for the plot.
+
+        #### Notes
+        This method evaluates the function at a grid of points and returns an
+        array of the results.
+        """
         grid_vals = [
             self.func(np.column_stack([self.X[itera], self.Y[itera]]))
             for itera in range(self.nelem)
@@ -46,6 +104,22 @@ class Plot2dObj:
         return np.array(grid_vals)
 
     def create3d(self, showGlob=True, savePath=None):
+        """
+        Creates a 3D surface plot of the function.
+
+        #### Parameters
+        **showGlob** (`bool`, optional)
+        : Whether to show the global minimum on the plot. Default is `True`.
+
+        **savePath** (`str`, optional)
+        : The path to save the plot. If `None`, the plot is shown instead.
+        Default is `None`.
+
+        #### Notes
+        This method creates a 3D surface plot of the function using matplotlib.
+        The plot includes a colorbar and optional markers and labels for the
+        global minimum.
+        """
         fig = plt.figure(figsize=(12, 10))
         ax = plt.subplot(projection="3d")
         surf = ax.plot_surface(
@@ -86,6 +160,22 @@ class Plot2dObj:
             plt.show()
 
     def createContour(self, showGlob=True, savePath=None):
+        """
+        Creates a 2D contour plot of the function.
+
+        #### Parameters
+        **showGlob** (`bool`, optional)
+        : Whether to show the global minimum on the plot. Default is `True`.
+
+        **savePath** (`str`, optional)
+        : The path to save the plot. If `None`, the plot is shown instead.
+        Default is `None`.
+
+        #### Notes
+        This method creates a 2D contour plot of the function using matplotlib.
+        The plot includes a colorbar, contour lines with labels, and optional
+        markersand labels for the global minimum.
+        """
         fig = plt.figure(figsize=(12, 10))
         ax = plt.subplot()
         [t.set_va("center") for t in ax.get_yticklabels()]

@@ -1,1 +1,1 @@
-from anneal.lib.aux import *
+from eindir.lib._aux import *
