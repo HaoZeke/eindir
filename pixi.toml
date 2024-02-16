@@ -1,0 +1,12 @@
+[project]
+name = "eindir"
+version = "0.1.0"
+authors = ["Rohit Goswami <rog32@hi.is>"]
+channels = ["conda-forge"]
+platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+
+[tasks]
+
+[dependencies]
+ipython = "8.21.0.*"
+pdm = "2.12.3.*"

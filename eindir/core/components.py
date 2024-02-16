@@ -1,13 +1,11 @@
-from dataclasses import dataclass
-from collections import namedtuple
-from enum import Enum
 import abc
+from dataclasses import dataclass
 
 import numpy as np
 import numpy.typing as npt
-import typing
 
 from eindir.core.exceptions import OutOfBounds
+
 
 @dataclass
 class FPair:
@@ -39,6 +37,7 @@ class FPair:
     evaluates this function at the position stored in the `pos` attribute, and
     updates the `val` attribute with the result.
     """
+
     pos: npt.NDArray
     val: float
 
@@ -107,6 +106,7 @@ class NumLimit:
 
     The `clip` method clips a given point to the bounds.
     """
+
     low: npt.NDArray
     high: npt.NDArray
     slack: float = 1e-6
@@ -126,8 +126,7 @@ class NumLimit:
         `OutOfBounds` exception is raised.
         """
         if not (
-            np.all(pos > self.low - self.slack)
-            and np.all(pos < self.high + self.slack)
+            np.all(pos > self.low - self.slack) and np.all(pos < self.high + self.slack)
         ):
             raise OutOfBounds(
                 f"{pos} is not within {self.slack} of {self.low} and {self.high}"
