@@ -1,0 +1,28 @@
+# {py:mod}`eindir.core.exceptions`
+
+```{py:module} eindir.core.exceptions
+```
+
+```{autodoc2-docstring} eindir.core.exceptions
+:allowtitles:
+```
+
+## Module Contents
+
+### API
+
+````{py:exception} OutOfBounds(message)
+:canonical: eindir.core.exceptions.OutOfBounds
+
+Bases: {py:obj}`ValueError`
+
+```{autodoc2-docstring} eindir.core.exceptions.OutOfBounds
+```
+
+```{rubric} Initialization
+```
+
+```{autodoc2-docstring} eindir.core.exceptions.OutOfBounds.__init__
+```
+
+````

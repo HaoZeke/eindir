@@ -1,0 +1,204 @@
+# {py:mod}`eindir.core.components`
+
+```{py:module} eindir.core.components
+```
+
+```{autodoc2-docstring} eindir.core.components
+:allowtitles:
+```
+
+## Module Contents
+
+### Classes
+
+````{list-table}
+:class: autosummary longtable
+:align: left
+
+* - {py:obj}`FPair <eindir.core.components.FPair>`
+  - ```{autodoc2-docstring} eindir.core.components.FPair
+    :summary:
+    ```
+* - {py:obj}`NumLimit <eindir.core.components.NumLimit>`
+  - ```{autodoc2-docstring} eindir.core.components.NumLimit
+    :summary:
+    ```
+* - {py:obj}`ObjectiveFunction <eindir.core.components.ObjectiveFunction>`
+  - ```{autodoc2-docstring} eindir.core.components.ObjectiveFunction
+    :summary:
+    ```
+````
+
+### API
+
+`````{py:class} FPair
+:canonical: eindir.core.components.FPair
+
+```{autodoc2-docstring} eindir.core.components.FPair
+```
+
+````{py:attribute} pos
+:canonical: eindir.core.components.FPair.pos
+:type: numpy.typing.NDArray
+:value: >
+   None
+
+```{autodoc2-docstring} eindir.core.components.FPair.pos
+```
+
+````
+
+````{py:attribute} val
+:canonical: eindir.core.components.FPair.val
+:type: float
+:value: >
+   None
+
+```{autodoc2-docstring} eindir.core.components.FPair.val
+```
+
+````
+
+````{py:method} EvalFunc(ObjFunc: callable)
+:canonical: eindir.core.components.FPair.EvalFunc
+
+```{autodoc2-docstring} eindir.core.components.FPair.EvalFunc
+```
+
+````
+
+`````
+
+`````{py:class} NumLimit
+:canonical: eindir.core.components.NumLimit
+
+```{autodoc2-docstring} eindir.core.components.NumLimit
+```
+
+````{py:attribute} low
+:canonical: eindir.core.components.NumLimit.low
+:type: numpy.typing.NDArray
+:value: >
+   None
+
+```{autodoc2-docstring} eindir.core.components.NumLimit.low
+```
+
+````
+
+````{py:attribute} high
+:canonical: eindir.core.components.NumLimit.high
+:type: numpy.typing.NDArray
+:value: >
+   None
+
+```{autodoc2-docstring} eindir.core.components.NumLimit.high
+```
+
+````
+
+````{py:attribute} slack
+:canonical: eindir.core.components.NumLimit.slack
+:type: float
+:value: >
+   1e-06
+
+```{autodoc2-docstring} eindir.core.components.NumLimit.slack
+```
+
+````
+
+````{py:attribute} dims
+:canonical: eindir.core.components.NumLimit.dims
+:type: int
+:value: >
+   1
+
+```{autodoc2-docstring} eindir.core.components.NumLimit.dims
+```
+
+````
+
+````{py:method} check(pos: numpy.typing.NDArray)
+:canonical: eindir.core.components.NumLimit.check
+
+```{autodoc2-docstring} eindir.core.components.NumLimit.check
+```
+
+````
+
+````{py:method} mkpoint() -> numpy.typing.NDArray
+:canonical: eindir.core.components.NumLimit.mkpoint
+
+```{autodoc2-docstring} eindir.core.components.NumLimit.mkpoint
+```
+
+````
+
+````{py:method} clip(point: numpy.typing.NDArray) -> numpy.typing.NDArray
+:canonical: eindir.core.components.NumLimit.clip
+
+```{autodoc2-docstring} eindir.core.components.NumLimit.clip
+```
+
+````
+
+`````
+
+`````{py:class} ObjectiveFunction(limits: eindir.core.components.NumLimit, global_min: eindir.core.components.FPair = None)
+:canonical: eindir.core.components.ObjectiveFunction
+
+```{autodoc2-docstring} eindir.core.components.ObjectiveFunction
+```
+
+```{rubric} Initialization
+```
+
+```{autodoc2-docstring} eindir.core.components.ObjectiveFunction.__init__
+```
+
+````{py:method} __subclasshook__(subclass)
+:canonical: eindir.core.components.ObjectiveFunction.__subclasshook__
+:classmethod:
+
+```{autodoc2-docstring} eindir.core.components.ObjectiveFunction.__subclasshook__
+```
+
+````
+
+````{py:method} __call__(pos)
+:canonical: eindir.core.components.ObjectiveFunction.__call__
+
+```{autodoc2-docstring} eindir.core.components.ObjectiveFunction.__call__
+```
+
+````
+
+````{py:method} singlepoint(pos)
+:canonical: eindir.core.components.ObjectiveFunction.singlepoint
+:abstractmethod:
+
+```{autodoc2-docstring} eindir.core.components.ObjectiveFunction.singlepoint
+```
+
+````
+
+````{py:method} multipoint(pos)
+:canonical: eindir.core.components.ObjectiveFunction.multipoint
+:abstractmethod:
+
+```{autodoc2-docstring} eindir.core.components.ObjectiveFunction.multipoint
+```
+
+````
+
+````{py:method} __repr__()
+:canonical: eindir.core.components.ObjectiveFunction.__repr__
+:abstractmethod:
+
+```{autodoc2-docstring} eindir.core.components.ObjectiveFunction.__repr__
+```
+
+````
+
+`````

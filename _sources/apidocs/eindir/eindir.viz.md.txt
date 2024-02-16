@@ -1,0 +1,17 @@
+# {py:mod}`eindir.viz`
+
+```{py:module} eindir.viz
+```
+
+```{autodoc2-docstring} eindir.viz
+:allowtitles:
+```
+
+## Submodules
+
+```{toctree}
+:titlesonly:
+:maxdepth: 1
+
+eindir.viz.viz2d
+```

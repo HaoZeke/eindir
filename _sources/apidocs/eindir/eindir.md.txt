@@ -1,0 +1,18 @@
+# {py:mod}`eindir`
+
+```{py:module} eindir
+```
+
+```{autodoc2-docstring} eindir
+:allowtitles:
+```
+
+## Subpackages
+
+```{toctree}
+:titlesonly:
+:maxdepth: 3
+
+eindir.viz
+eindir.core
+```

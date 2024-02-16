@@ -1,0 +1,62 @@
+# {py:mod}`eindir.viz.viz2d`
+
+```{py:module} eindir.viz.viz2d
+```
+
+```{autodoc2-docstring} eindir.viz.viz2d
+:allowtitles:
+```
+
+## Module Contents
+
+### Classes
+
+````{list-table}
+:class: autosummary longtable
+:align: left
+
+* - {py:obj}`Plot2dObj <eindir.viz.viz2d.Plot2dObj>`
+  - ```{autodoc2-docstring} eindir.viz.viz2d.Plot2dObj
+    :summary:
+    ```
+````
+
+### API
+
+`````{py:class} Plot2dObj(obj: eindir.core.components.ObjectiveFunction, nelem: int)
+:canonical: eindir.viz.viz2d.Plot2dObj
+
+```{autodoc2-docstring} eindir.viz.viz2d.Plot2dObj
+```
+
+```{rubric} Initialization
+```
+
+```{autodoc2-docstring} eindir.viz.viz2d.Plot2dObj.__init__
+```
+
+````{py:method} prepVals()
+:canonical: eindir.viz.viz2d.Plot2dObj.prepVals
+
+```{autodoc2-docstring} eindir.viz.viz2d.Plot2dObj.prepVals
+```
+
+````
+
+````{py:method} create3d(showGlob=True, savePath=None)
+:canonical: eindir.viz.viz2d.Plot2dObj.create3d
+
+```{autodoc2-docstring} eindir.viz.viz2d.Plot2dObj.create3d
+```
+
+````
+
+````{py:method} createContour(showGlob=True, savePath=None)
+:canonical: eindir.viz.viz2d.Plot2dObj.createContour
+
+```{autodoc2-docstring} eindir.viz.viz2d.Plot2dObj.createContour
+```
+
+````
+
+`````
