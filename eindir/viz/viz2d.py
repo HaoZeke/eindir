@@ -3,7 +3,7 @@ from cmcrameri import cm
 from matplotlib.ticker import LinearLocator, FormatStrFormatter
 import numpy as np
 
-from eindir.core.components import ObjectiveFunction, FPair
+from eindir import ObjectiveFunction, FPair
 
 
 class Plot2dObj:
