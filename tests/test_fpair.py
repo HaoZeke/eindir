@@ -1,7 +1,7 @@
-import pytest
 import numpy as np
 
-from eindir.core.components import FPair 
+from eindir.core.components import FPair
+
 
 def test_fpair():
     def dummy_func(x):

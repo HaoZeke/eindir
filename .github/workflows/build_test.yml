@@ -3,8 +3,8 @@ on: [push, pull_request]
 permissions:
   contents: write
 jobs:
-  build_docs:
-    name: Build documentation
+  build_test:
+    name: Build and test
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
