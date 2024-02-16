@@ -7,4 +7,3 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 This project uses [*towncrier*](https://towncrier.readthedocs.io/) and the changes for the upcoming release can be [found here](https://github.com/HaoZeke/eindir/tree/main/changelog.d/).
 
 <!-- towncrier release notes start -->
-

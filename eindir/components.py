@@ -1,5 +1,5 @@
-from dataclasses import dataclass
 import abc
+from dataclasses import dataclass
 
 import numpy as np
 import numpy.typing as npt

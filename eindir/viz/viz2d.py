@@ -1,9 +1,9 @@
 import matplotlib.pyplot as plt
-from cmcrameri import cm
-from matplotlib.ticker import LinearLocator, FormatStrFormatter
 import numpy as np
+from cmcrameri import cm
+from matplotlib.ticker import FormatStrFormatter, LinearLocator
 
-from eindir import ObjectiveFunction, FPair
+from eindir import FPair, ObjectiveFunction
 
 
 class Plot2dObj:
