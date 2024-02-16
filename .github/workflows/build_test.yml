@@ -19,4 +19,4 @@ jobs:
       - name: Lint things
         run: pdm run lint
       - name: Build and test
-        run: pdm run lint
+        run: pdm run test
