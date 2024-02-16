@@ -28,12 +28,14 @@ classifiers = [
 ]
 
 [build-system]
-requires = ["pdm-backend"]
-build-backend = "pdm.backend"
+build-backend = "hatchling.build"
+requires      = [ "hatch-vcs", "hatchling" ]
 
-[tool.pdm.version]
-source = "scm"
-write_to = "_version.py"
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "_version.py"
 
 [project.optional-dependencies]
 plotter = [
@@ -44,26 +46,21 @@ testing = [
     "pytest>=8.0.0",
     "pytest-datadir>=1.5.0",
 ]
-
-[tool.pdm]
-[tool.pdm.dev-dependencies]
+docs = [
+    "furo",
+    "sphinx",
+    "sphinx-contributors",
+    "sphinx-copybutton",
+    "sphinx-design",
+    "sphinx-autobuild",
+    "sphinxcontrib-spelling",
+    "myst-parser>=2", # Needs py38
+    "sphinx-autodoc2>=0.4.2", # Needs py38
+]
 lint = [
     "ruff>=0.2.1",
 ]
-docs = [
-    "sphinx>=6.1.3",
-]
-
-[tool.pdm.scripts]
-check_ruff  = "ruff ."
-ruff_fix    = "ruff --fix ."
-ruff_format = "ruff format ."
-lint        = { composite = [ "ruff_fix", "ruff_format" ] }
-test        = "pytest --cov=eindir tests"
 
 [project.urls]
 "Homepage" = "https://github.com/HaoZeke/eindir"
 "Bug Tracker" = "https://github.com/HaoZeke/eindir/issues"
-
-[project.scripts]
-eindir = "eindir.cli.main:hello"
