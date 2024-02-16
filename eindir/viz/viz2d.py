@@ -1,10 +1,10 @@
-import pandas as pd
 import matplotlib.pyplot as plt
-from matplotlib import cm
+from cmcrameri import cm
 from matplotlib.ticker import LinearLocator, FormatStrFormatter
 import numpy as np
 
 from eindir.core.components import ObjectiveFunction, FPair
+
 
 class Plot2dObj:
     """
@@ -49,6 +49,7 @@ class Plot2dObj:
 
     The `createContour` method creates a 2D contour plot of the function.
     """
+
     def __init__(self, obj: ObjectiveFunction, nelem: int):
         """
         Initializes an instance of the Plot2dObj class.
@@ -122,9 +123,7 @@ class Plot2dObj:
         """
         fig = plt.figure(figsize=(12, 10))
         ax = plt.subplot(projection="3d")
-        surf = ax.plot_surface(
-            self.X, self.Y, self.Z, cmap=cm.coolwarm, alpha=0.7
-        )
+        surf = ax.plot_surface(self.X, self.Y, self.Z, cmap=cm.batlow, alpha=0.7)
         ax.zaxis.set_major_locator(LinearLocator(10))
         ax.zaxis.set_major_formatter(FormatStrFormatter("%.1f"))
         [t.set_va("center") for t in ax.get_yticklabels()]
@@ -176,7 +175,7 @@ class Plot2dObj:
         The plot includes a colorbar, contour lines with labels, and optional
         markersand labels for the global minimum.
         """
-        fig = plt.figure(figsize=(12, 10))
+        plt.figure(figsize=(12, 10))
         ax = plt.subplot()
         [t.set_va("center") for t in ax.get_yticklabels()]
         [t.set_ha("left") for t in ax.get_yticklabels()]
@@ -186,13 +185,11 @@ class Plot2dObj:
             self.Z,
             extent=self.contourExtent,
             origin="lower",
-            cmap="viridis",
+            cmap=cm.batlow,
             alpha=0.8,
         )
         plt.colorbar()
-        contours = ax.contour(
-            self.X, self.Y, self.Z, 10, colors="black", alpha=0.9
-        )
+        contours = ax.contour(self.X, self.Y, self.Z, 10, colors="black", alpha=0.9)
         plt.clabel(contours, inline=True, fontsize=8, fmt="%.0f")
         if showGlob:
             plt.plot(
