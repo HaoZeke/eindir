@@ -1,5 +1,6 @@
 import numpy as np
-from eindir.core.components import ObjectiveFunction, NumLimit
+
+from eindir.core.components import NumLimit, ObjectiveFunction
 
 
 class DummyObjectiveFunction(ObjectiveFunction):

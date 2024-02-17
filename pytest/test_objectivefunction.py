@@ -1,6 +1,6 @@
-import pytest
 import numpy as np
-from eindir.core.components import ObjectiveFunction, NumLimit, FPair
+
+from eindir.core.components import NumLimit, ObjectiveFunction
 
 
 class DummyObjectiveFunction(ObjectiveFunction):
@@ -19,10 +19,10 @@ def test_objective_function():
     obj_func = DummyObjectiveFunction(limits=limits)
     single_point = np.array([1, 1])
     multi_point = np.array([[1, 1], [2, 2]])
-    
-    single_result = obj_func(single_point)
+
+    obj_func(single_point)
     assert obj_func(single_point)[0] == 1, "Single point evaluation failed."
-    
+
     multi_result = obj_func(multi_point)
     expected_results = np.array([2, 8])
     assert np.allclose(multi_result, expected_results), "Multi-point evaluation failed."
