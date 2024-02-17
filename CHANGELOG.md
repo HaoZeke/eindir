@@ -8,6 +8,12 @@ This project uses [*towncrier*](https://towncrier.readthedocs.io/) and the chang
 
 <!-- towncrier release notes start -->
 
+## [0.1.0](https://github.com/HaoZeke/eindir/tree/0.1.0) - 17-02-2024
+
+
+No significant changes.
+
+
 ## [0.0.5](https://github.com/HaoZeke/eindir/tree/0.0.5) - 17-02-2024
 
 
