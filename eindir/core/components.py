@@ -144,7 +144,7 @@ class NumLimit:
 
         TODO: Handle other constraints (undefined regions)
         """
-        return np.random.default_rng().uniform(self.low, self.high, self.dims)
+        return np.random.default_rng().uniform(low=self.low, high=self.high)
 
     def clip(self, point: npt.NDArray) -> npt.NDArray:
         """
