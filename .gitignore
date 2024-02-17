@@ -258,3 +258,4 @@ Temporary Items
 /.pdm-python
 /_version.py
 /eindir/_version.py
+/.pdm-build/
