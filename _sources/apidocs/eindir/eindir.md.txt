@@ -13,6 +13,6 @@
 :titlesonly:
 :maxdepth: 3
 
-eindir.viz
 eindir.core
+eindir.viz
 ```
