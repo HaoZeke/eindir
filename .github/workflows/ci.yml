@@ -73,15 +73,28 @@ jobs:
           echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
           echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Configure pyo3 + linker for macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          PYBIN="$(which python)"
+          echo "PYO3_PYTHON=$PYBIN" >> "$GITHUB_ENV"
+          # Allow pyo3 extension-module symbols to remain undefined at
+          # link time on macOS; the dynamic loader resolves them against
+          # the embedding interpreter at run time.
+          {
+            echo "RUSTFLAGS=-C link-arg=-undefined -C link-arg=dynamic_lookup"
+          } >> "$GITHUB_ENV"
+
       - name: cargo test
         run: cargo test
 
       - name: cargo test --all-features
         run: cargo test --all-features
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python-version }}
 
       - name: Create virtualenv
         shell: bash
