@@ -259,3 +259,8 @@ Temporary Items
 /_version.py
 /eindir/_version.py
 /.pdm-build/
+
+# Sphinx build artefacts (regenerated from docs/orgmode/*.org via orgbld)
+docs/source/*.rst
+docs/source/crates/
+docs/build/
