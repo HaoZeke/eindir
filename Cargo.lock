@@ -273,7 +273,7 @@ dependencies = [
 
 [[package]]
 name = "eindir-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "cbindgen",
  "criterion",
