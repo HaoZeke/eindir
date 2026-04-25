@@ -24,6 +24,9 @@ pub mod ffi;
 /// pyo3 bindings for `eindir._core`, gated behind the `python` Cargo feature.
 #[cfg(feature = "python")]
 pub mod python;
+/// Adapter wrapping a Python callable into the Rust `Objective<f64>` trait.
+#[cfg(feature = "python")]
+pub mod py_objective;
 
 pub use error::Error;
 pub use fpair::FPair;
