@@ -14,7 +14,7 @@ namespace eindir {
 
 /// Returns the eindir-core package version as a NUL-terminated C string.
 inline const char* version() noexcept {
-    return ::eindir_core_version();
+    return eindir_core_version();
 }
 
 }  // namespace eindir

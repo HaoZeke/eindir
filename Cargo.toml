@@ -35,9 +35,10 @@ cbindgen = "0.29"
 min_version = "0.10.17"
 
 [package.metadata.capi.header]
-name       = "eindir-core.h"
-generation = true
-enabled    = true
+name         = "eindir-core.h"
+subdirectory = ""
+generation   = true
+enabled      = true
 
 [package.metadata.capi.pkg_config]
 name        = "eindir-core"
