@@ -1,0 +1,1 @@
+//! Reserved for the typed component algebra (Spec 2, eindir v0.3.0).
