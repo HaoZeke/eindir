@@ -1,66 +1,35 @@
+[build-system]
+requires = ["maturin>=1.5,<2.0"]
+build-backend = "maturin"
+
 [project]
 name = "eindir"
 description = "A set of \"particles\" or components mainly focused on working with functions in ND."
 authors = [
-    { name="Rohit Goswami", email="rgoswami@ieee.org" },
-    { name="Ruhila S", email="ruhila@ieee.org" },
-    { name="Amrita Goswami", email="amrita@hi.is" },
-    { name="Sonaly Goswami", email="sonaly@iitk.ac.in" },
-    { name="Debabrata Goswami", email="dgoswami@iitk.ac.in" },
+    { name = "Rohit Goswami",   email = "rgoswami@ieee.org" },
+    { name = "Ruhila S",         email = "ruhila@ieee.org" },
+    { name = "Amrita Goswami",   email = "amrita@hi.is" },
+    { name = "Sonaly Goswami",   email = "sonaly@iitk.ac.in" },
+    { name = "Debabrata Goswami", email = "dgoswami@iitk.ac.in" },
 ]
 maintainers = [
-    { name="Rohit Goswami", email="rgoswami@ieee.org" },
-    { name="Ruhila S", email="ruhila@ieee.org" },
-    { name="Amrita Goswami", email="amrita@hi.is" },
+    { name = "Rohit Goswami", email = "rgoswami@ieee.org" },
+    { name = "Ruhila S",       email = "ruhila@ieee.org" },
+    { name = "Amrita Goswami", email = "amrita@hi.is" },
 ]
-dependencies = [
-    "numpy>=1.26.4",
-]
-requires-python = ">=3.10.1"
+version = "0.2.0"
+requires-python = ">=3.10"
+license = "MIT"
 readme = "README.md"
-license = {text = "MIT"}
-dynamic = [ "version" ]
-
 keywords = ["library", "tools", "structures"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
 ]
-
-[build-system]
-requires = ["pdm-backend"]
-build-backend = "pdm.backend"
-
-[tool.pdm]
-[tool.pdm.version]
-source = "scm"
-write_to = "_version.py"
-
-[tool.pdm.dev-dependencies]
-lint = [
-    "ruff>=0.2.1",
+dependencies = [
+    "numpy>=1.26.4",
 ]
-docs = [
-    "sphinx>=7.2.6",
-    "furo>=2024.1.29",
-    "sphinx-contributors>=0.2.7",
-    "sphinx-copybutton>=0.5.2",
-    "sphinx-design>=0.5.0",
-    "sphinx-autobuild>=2024.2.4",
-    "sphinxcontrib-spelling>=8.0.0",
-    "myst-parser>=2",
-    "sphinx-autodoc2>=0.4.2",
-]
-
-[tool.pdm.scripts]
-check_ruff  = "ruff ."
-ruff_fix    = "ruff --fix --unsafe-fixes ."
-ruff_format = "ruff format ."
-lint        = { composite = [ "ruff_fix", "ruff_format" ] }
-test        = "pytest --cov=eindir tests"
-mkdoc = {composite = ["sphinx-build -b html docs/source docs/build/html"]}
 
 [project.optional-dependencies]
 plotter = [
@@ -68,10 +37,15 @@ plotter = [
     "cmcrameri>=1.8",
 ]
 testing = [
-    "pytest>=8.0.0",
-    "pytest-cov>=4.1.0",
+    "pytest>=8",
+    "pytest-cov>=4.1",
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/HaoZeke/eindir"
+"Homepage"   = "https://github.com/HaoZeke/eindir"
 "Bug Tracker" = "https://github.com/HaoZeke/eindir/issues"
+
+[tool.maturin]
+features      = ["python"]
+module-name   = "eindir._core"
+python-source = "python"
