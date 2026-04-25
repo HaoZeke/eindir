@@ -10,6 +10,10 @@
 pub mod error;
 /// Typed component algebra (placeholder; populated in v0.3.0).
 pub mod types;
+/// Position-value pairs.
+pub mod fpair;
+/// Box bounds on N-dimensional points.
+pub mod bounds;
 /// C ABI surface, gated behind the `capi` Cargo feature.
 #[cfg(feature = "capi")]
 pub mod ffi;
@@ -18,3 +22,5 @@ pub mod ffi;
 pub mod python;
 
 pub use error::Error;
+pub use fpair::FPair;
+pub use bounds::Bounds;
