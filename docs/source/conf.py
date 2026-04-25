@@ -1,52 +1,30 @@
-# -- Project information -----------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#project-information
+import os
 
-project = "eindir"
-copyright = "2023--present, eindir Developers"
-author = "eindir Developers"
-version = "0.1.0"
-
-# -- General configuration ---------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#general-configuration
+project   = "eindir"
+copyright = "2026--present, eindir developers"
+author    = "eindir developers"
+release   = "0.2.0"
 
 extensions = [
-    "myst_parser",
-    "autodoc2",
-    "sphinx.ext.napoleon",
+    "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
-    "sphinx.ext.todo",
-    "sphinx.ext.githubpages",
-    "sphinx_contributors",
-    "sphinx_copybutton",
-    "sphinx_design",
-    "sphinxcontrib.spelling",
+    "sphinxcontrib_rust",
+    "sphinx_rustdoc_postprocess",
 ]
-
-autodoc2_render_plugin = "myst"
-autodoc2_packages = [
-    "../../eindir",
-]
-
-myst_enable_extensions = [
-    "deflist",
-]
-
-intersphinx_mapping = {
-    "eindir": ("https://asv.readthedocs.io/en/latest/", None),
-}
 
 templates_path = ["_templates"]
 exclude_patterns = []
 
+rust_crates       = {"eindir_core": os.path.abspath("../../")}
+rust_doc_dir      = os.path.join(os.path.dirname(os.path.abspath(__file__)), "crates")
+rust_rustdoc_fmt  = "rst"
+rust_generate_mode = "always"
 
-# -- Options for HTML output -------------------------------------------------
-# https://www.sphinx-doc.org/en/master/usage/configuration.html#options-for-html-output
+html_theme        = "shibuya"
+html_static_path  = ["_static"]
+html_theme_options = {"github_url": "https://github.com/HaoZeke/eindir"}
 
-html_theme = "furo"
-html_static_path = ["_static"]
-
-html_theme_options = {
-    "source_repository": "https://github.com/HaoZeke/eindir/",
-    "source_branch": "main",
-    "source_directory": "docs/",
+intersphinx_mapping = {
+    "python": ("https://docs.python.org/3", None),
+    "numpy":  ("https://numpy.org/doc/stable", None),
 }

@@ -1,0 +1,43 @@
+#+TITLE: Tutorials
+
+* Install
+
+** Python (pip)
+
+#+BEGIN_SRC bash
+pip install eindir
+#+END_SRC
+
+** Pixi (development)
+
+#+BEGIN_SRC bash
+pixi install
+pixi run -e python python-test
+#+END_SRC
+
+** From source (cargo)
+
+#+BEGIN_SRC bash
+cargo build --release
+cargo cinstall --release --prefix /usr/local
+#+END_SRC
+
+* Hello eindir
+
+#+BEGIN_SRC python
+import eindir
+print(eindir._core.__version__)
+#+END_SRC
+
+* Bounds and FPair
+
+The =FPair= and =NumLimit= primitives exposed today match the legacy
+API surface; the typed Rust replacements land with v0.3.0 alongside
+the =anneal= component algebra.
+
+#+BEGIN_SRC python
+import numpy as np
+from eindir.core.components import NumLimit
+b = NumLimit(low=np.array([-1., -1.]), high=np.array([1., 1.]), dims=2)
+print(b.mkpoint())
+#+END_SRC

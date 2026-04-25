@@ -1,0 +1,24 @@
+#+TITLE: eindir
+#+AUTHOR: eindir developers
+#+DATE: 2026
+
+* About
+
+=eindir= ships typed primitives for ND objective functions and bounded
+sampling. The Python user-facing surface is unchanged from the legacy
+package; the Rust crate =eindir-core= now backs the implementations,
+with =pyo3= bindings exposed as =eindir._core= and a C/C++ ABI for
+downstream native consumers.
+
+* Contents
+
+#+TOC: headlines 2
+
+* Background
+
+=eindir= is the primitives layer of the simmAnneal stack. The companion
+package =anneal= consumes the =Objective= trait and ships the typed
+component algebra for simulated annealing.
+
+The IISE manuscript at HaoZeke/anneal (paper) defines the algebra; this
+crate hosts the Obj signature and its builtin instantiations.
