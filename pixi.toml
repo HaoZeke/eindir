@@ -1,12 +1,36 @@
-[project]
-name = "eindir"
-version = "0.1.0"
-authors = ["Rohit Goswami <rog32@hi.is>"]
-channels = ["conda-forge"]
-platforms = ["win-64", "linux-64", "osx-64", "osx-arm64"]
+[workspace]
+name      = "eindir"
+version   = "0.2.0"
+description = "Typed primitives for ND objective functions and bounded sampling."
+channels  = ["conda-forge"]
+platforms = ["linux-64", "osx-arm64", "osx-64"]
+
+[activation.env]
+# Pixi inherits the host cargo config; the conda rust toolchain ships its
+# own gcc which does not understand -fuse-ld=/usr/bin/mold. Clear inherited
+# rustflags so the conda-managed linker is driven cleanly.
+CARGO_BUILD_RUSTFLAGS = ""
+RUSTFLAGS = ""
 
 [tasks]
+test     = "cargo test"
+test-all = "cargo test --all-features"
+bench    = "cargo bench"
+build    = "cargo build --release"
 
 [dependencies]
-ipython = "8.21.0.*"
-pdm = "2.12.3.*"
+rust = ">=1.88"
+
+[feature.python.dependencies]
+python  = ">=3.10"
+maturin = ">=1.5"
+pytest  = "*"
+pip     = "*"
+
+[feature.python.tasks]
+python-build = "maturin develop --features python"
+python-test  = { cmd = "pytest pytest/", depends-on = ["python-build"] }
+
+[environments]
+default = { solve-group = "default" }
+python  = { features = ["python"], solve-group = "default" }
