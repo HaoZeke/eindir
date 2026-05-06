@@ -28,6 +28,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
+    "array-api-compat>=1.12",
     "numpy>=1.26.4",
 ]
 
@@ -37,6 +38,7 @@ plotter = [
     "cmcrameri>=1.8",
 ]
 testing = [
+    "array-api-strict>=2",
     "pytest>=8",
     "pytest-cov>=4.1",
 ]

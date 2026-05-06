@@ -26,6 +26,8 @@ python  = ">=3.10"
 maturin = ">=1.5"
 pytest  = "*"
 pip     = "*"
+array-api-compat = ">=1.12"
+array-api-strict = ">=2"
 
 [feature.python.tasks]
 python-build = "maturin develop --features python"
