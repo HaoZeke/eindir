@@ -20,7 +20,10 @@ def array_namespace(*arrays: Any) -> Any:
     values = _non_null_arrays(arrays)
     if not values:
         raise ValueError("At least one array is required")
-    return _array_api_compat.array_namespace(*values, use_compat=True)
+    try:
+        return _array_api_compat.array_namespace(*values, use_compat=True)
+    except ValueError:
+        return _array_api_compat.array_namespace(*values)
 
 
 def array_device(array: Any) -> Any:

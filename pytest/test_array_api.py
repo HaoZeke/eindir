@@ -20,7 +20,7 @@ def test_numpy_namespace_device_and_styblinski_tang():
     assert xp.asarray is not None
     assert array_device(points) == "cpu"
     assert np.asarray(values).shape == (2,)
-    assert np.asarray(values)[0] == pytest.approx(-78.33198, abs=1e-4)
+    assert np.asarray(values)[0] == pytest.approx(-78.3323314075428, abs=1e-12)
     assert np.asarray(values)[1] == pytest.approx(0.0)
 
 
