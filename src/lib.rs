@@ -18,6 +18,8 @@ pub mod bounds;
 pub mod objective;
 /// Builtin objective-function implementations for benchmarking and tests.
 pub mod objectives;
+/// Dimension-collapse and Chebyshev surrogate `Obj`-transforms.
+pub mod reduced;
 /// C ABI surface, gated behind the `capi` Cargo feature.
 #[cfg(feature = "capi")]
 pub mod ffi;
@@ -33,3 +35,4 @@ pub use fpair::FPair;
 pub use bounds::Bounds;
 pub use objective::Objective;
 pub use objectives::{StybTang2D, Rastrigin, Rosenbrock, Ackley};
+pub use reduced::{ChebyshevSurrogate, ReducedObjective};

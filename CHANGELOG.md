@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.4.0] - 2026
+
+### Added
+
+- `ReducedObjective<O>`: an `Obj`-transform that collapses any inner
+  objective onto a low-dimensional box through an affine encode/decode
+  (origin plus a basis spanning a retained subspace), so a sampler
+  searches the reduced coordinates while every value is the true
+  objective.
+- `ChebyshevSurrogate`: a total-degree Chebyshev model on a reduced box
+  with cheap value and an analytic gradient, fit elsewhere from pilot
+  samples. Both are `Objective` implementations, so every point of the
+  typed algebra consumes them through the same trait.
+
 ## [0.2.0] - 2026
 
 ### Changed
