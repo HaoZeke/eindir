@@ -1,8 +1,8 @@
 //! Styblinski-Tang 2D: a non-convex benchmark with a single global minimum.
 
+use crate::{Bounds, FPair, Objective};
 use ndarray::{Array1, ArrayView1};
 use std::sync::OnceLock;
-use crate::{Bounds, FPair, Objective};
 
 /// 2D Styblinski-Tang objective `(1/2) * sum_i (x_i^4 - 16 x_i^2 + 5 x_i)`.
 ///
@@ -19,7 +19,7 @@ impl StybTang2D {
         Self {
             bounds: Bounds::new(
                 Array1::from_vec(vec![-5.0, -5.0]),
-                Array1::from_vec(vec![ 5.0,  5.0]),
+                Array1::from_vec(vec![5.0, 5.0]),
                 1e-9,
             ),
             min: OnceLock::new(),

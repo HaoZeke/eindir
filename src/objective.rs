@@ -1,8 +1,8 @@
 //! The `Objective` trait: a typed function `Obj : S -> R` from the IISE manuscript.
 
+use crate::{Bounds, FPair};
 use ndarray::{Array1, ArrayView1, ArrayView2};
 use num_traits::Float;
-use crate::{Bounds, FPair};
 
 /// A real-valued function on `R^dim` with a known feasible domain.
 ///

@@ -11,8 +11,8 @@
 //! (`ChebyshevSurrogate`). Because both are objectives, the same collapse and
 //! surrogate serve every point of the algebra at once.
 
-use ndarray::{Array1, Array2, ArrayView1};
 use crate::{Bounds, Objective};
+use ndarray::{Array1, Array2, ArrayView1};
 
 /// Affine dimension-collapse of an inner objective onto a `k`-dimensional box.
 ///
@@ -36,10 +36,27 @@ impl<O: Objective<f64>> ReducedObjective<O> {
     /// Panics when the shapes disagree: `origin.len()` and `basis.nrows()` must
     /// equal `inner.dim()`, and `basis.ncols()` must equal `bounds.dims`.
     pub fn new(inner: O, origin: Array1<f64>, basis: Array2<f64>, bounds: Bounds<f64>) -> Self {
-        assert_eq!(origin.len(), inner.dim(), "origin length must match inner dim");
-        assert_eq!(basis.nrows(), inner.dim(), "basis rows must match inner dim");
-        assert_eq!(basis.ncols(), bounds.dims, "basis cols must match reduced dim");
-        Self { inner, origin, basis, bounds }
+        assert_eq!(
+            origin.len(),
+            inner.dim(),
+            "origin length must match inner dim"
+        );
+        assert_eq!(
+            basis.nrows(),
+            inner.dim(),
+            "basis rows must match inner dim"
+        );
+        assert_eq!(
+            basis.ncols(),
+            bounds.dims,
+            "basis cols must match reduced dim"
+        );
+        Self {
+            inner,
+            origin,
+            basis,
+            bounds,
+        }
     }
 
     /// Decodes a reduced coordinate `r in R^k` to a full point `x in R^n`,
@@ -92,12 +109,20 @@ impl ChebyshevSurrogate {
     /// Panics when `terms.len() != coeffs.len()` or when any multi-index length
     /// differs from `bounds.dims`.
     pub fn new(bounds: Bounds<f64>, terms: Vec<Vec<usize>>, coeffs: Array1<f64>) -> Self {
-        assert_eq!(terms.len(), coeffs.len(), "one coefficient per term required");
+        assert_eq!(
+            terms.len(),
+            coeffs.len(),
+            "one coefficient per term required"
+        );
         assert!(
             terms.iter().all(|t| t.len() == bounds.dims),
             "every multi-index must have length bounds.dims",
         );
-        Self { bounds, terms, coeffs }
+        Self {
+            bounds,
+            terms,
+            coeffs,
+        }
     }
 
     /// Maps a box coordinate to `[-1, 1]`; degenerate intervals map to zero.
@@ -248,7 +273,12 @@ mod tests {
             xp[j] += h;
             xm[j] -= h;
             let fd = (s.eval(xp.view()) - s.eval(xm.view())) / (2.0 * h);
-            assert!((g[j] - fd).abs() < 1e-5, "dim {j}: analytic {} vs fd {}", g[j], fd);
+            assert!(
+                (g[j] - fd).abs() < 1e-5,
+                "dim {j}: analytic {} vs fd {}",
+                g[j],
+                fd
+            );
         }
     }
 }

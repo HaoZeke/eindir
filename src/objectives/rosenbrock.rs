@@ -1,8 +1,8 @@
 //! N-dimensional Rosenbrock: classic banana-shaped valley benchmark.
 
+use crate::{Bounds, FPair, Objective};
 use ndarray::{Array1, ArrayView1};
 use std::sync::OnceLock;
-use crate::{Bounds, FPair, Objective};
 
 /// N-dimensional Rosenbrock: `sum_{i=0}^{D-2} (100 * (x_{i+1} - x_i^2)^2 + (1 - x_i)^2)`.
 /// Domain `[-2.048, 2.048]^D`. Global minimum at `x = (1, 1, ..., 1)` with value `0`.
@@ -17,7 +17,7 @@ impl<const D: usize> Rosenbrock<D> {
         Self {
             bounds: Bounds::new(
                 Array1::from_vec(vec![-2.048; D]),
-                Array1::from_vec(vec![ 2.048; D]),
+                Array1::from_vec(vec![2.048; D]),
                 1e-9,
             ),
             min: OnceLock::new(),

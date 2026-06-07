@@ -1,8 +1,8 @@
 //! N-dimensional Rastrigin: highly multimodal benchmark.
 
+use crate::{Bounds, FPair, Objective};
 use ndarray::{Array1, ArrayView1};
 use std::sync::OnceLock;
-use crate::{Bounds, FPair, Objective};
 
 /// N-dimensional Rastrigin: `A * D + sum_i (x_i^2 - A * cos(2 * pi * x_i))`
 /// with `A = 10`. Domain `[-5.12, 5.12]^D`. Global minimum at the origin
@@ -20,7 +20,7 @@ impl<const D: usize> Rastrigin<D> {
         Self {
             bounds: Bounds::new(
                 Array1::from_vec(vec![-5.12; D]),
-                Array1::from_vec(vec![ 5.12; D]),
+                Array1::from_vec(vec![5.12; D]),
                 1e-9,
             ),
             min: OnceLock::new(),

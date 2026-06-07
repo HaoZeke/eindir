@@ -1,8 +1,8 @@
 //! N-dimensional Ackley: nearly flat outer region with a deep central well.
 
+use crate::{Bounds, FPair, Objective};
 use ndarray::{Array1, ArrayView1};
 use std::sync::OnceLock;
-use crate::{Bounds, FPair, Objective};
 
 /// N-dimensional Ackley: a multi-modal benchmark with a sharp central well.
 /// Domain `[-32.768, 32.768]^D`. Global minimum at the origin with value `0`.
@@ -20,7 +20,7 @@ impl<const D: usize> Ackley<D> {
         Self {
             bounds: Bounds::new(
                 Array1::from_vec(vec![-32.768; D]),
-                Array1::from_vec(vec![ 32.768; D]),
+                Array1::from_vec(vec![32.768; D]),
                 1e-9,
             ),
             min: OnceLock::new(),
@@ -48,8 +48,7 @@ impl<const D: usize> Objective<f64> for Ackley<D> {
         let n = D as f64;
         let sum_sq: f64 = x.iter().map(|xi| xi.powi(2)).sum();
         let sum_cos: f64 = x.iter().map(|xi| (two_pi * xi).cos()).sum();
-        -Self::A * (-Self::B * (sum_sq / n).sqrt()).exp()
-            - (sum_cos / n).exp()
+        -Self::A * (-Self::B * (sum_sq / n).sqrt()).exp() - (sum_cos / n).exp()
             + Self::A
             + std::f64::consts::E
     }

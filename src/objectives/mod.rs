@@ -1,11 +1,11 @@
 //! Builtin objective-function implementations for benchmarking and tests.
 
-pub mod styblinski_tang;
+pub mod ackley;
 pub mod rastrigin;
 pub mod rosenbrock;
-pub mod ackley;
+pub mod styblinski_tang;
 
-pub use styblinski_tang::StybTang2D;
+pub use ackley::Ackley;
 pub use rastrigin::Rastrigin;
 pub use rosenbrock::Rosenbrock;
-pub use ackley::Ackley;
+pub use styblinski_tang::StybTang2D;

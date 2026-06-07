@@ -33,14 +33,19 @@ where
     pub fn new(low: Array1<T>, high: Array1<T>, slack: T) -> Self {
         let dims = low.len();
         assert_eq!(low.len(), high.len(), "low and high have different shapes");
-        Self { low, high, slack, dims }
+        Self {
+            low,
+            high,
+            slack,
+            dims,
+        }
     }
 
     /// True if every coordinate of `x` lies within `slack` of the box.
     pub fn contains(&self, x: ArrayView1<T>) -> bool {
-        x.iter().enumerate().all(|(i, &xi)| {
-            xi >= self.low[i] - self.slack && xi <= self.high[i] + self.slack
-        })
+        x.iter()
+            .enumerate()
+            .all(|(i, &xi)| xi >= self.low[i] - self.slack && xi <= self.high[i] + self.slack)
     }
 
     /// Draws a uniform random point inside the box.
@@ -54,8 +59,10 @@ where
 
     /// Clips each coordinate of `x` to the closed `[low, high]` interval.
     pub fn clip(&self, x: ArrayView1<T>) -> Array1<T> {
-        Array1::from_iter(x.iter().enumerate().map(|(i, &xi)| {
-            xi.max(self.low[i]).min(self.high[i])
-        }))
+        Array1::from_iter(
+            x.iter()
+                .enumerate()
+                .map(|(i, &xi)| xi.max(self.low[i]).min(self.high[i])),
+        )
     }
 }
