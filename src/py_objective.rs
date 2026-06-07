@@ -8,10 +8,11 @@
 //! zero-copy path can replace this in v0.4 once the workspace settles on a
 //! single ndarray version end-to-end.
 
+use crate::{Bounds, FPair, Objective};
 use ndarray::{Array1, ArrayView1};
 use numpy::{PyArray1, PyReadonlyArray1};
+use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
-use crate::{Bounds, FPair, Objective};
 
 /// pyo3-exposed wrapper around `Bounds<f64>` constructed from numpy arrays.
 #[pyclass(name = "Bounds")]
@@ -58,7 +59,10 @@ impl PyBounds {
     ) -> PyResult<Bound<'py, PyArray1<f64>>> {
         let slice = x.as_slice()?;
         let clipped = self.inner.clip(ArrayView1::from(slice));
-        Ok(PyArray1::from_slice(py, clipped.as_slice().expect("Array1 is contiguous")))
+        Ok(PyArray1::from_slice(
+            py,
+            clipped.as_slice().expect("Array1 is contiguous"),
+        ))
     }
 }
 
@@ -81,10 +85,7 @@ impl PyFPair {
 
     #[getter]
     fn pos<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
-        PyArray1::from_slice(
-            py,
-            self.inner.pos.as_slice().expect("Array1 is contiguous"),
-        )
+        PyArray1::from_slice(py, self.inner.pos.as_slice().expect("Array1 is contiguous"))
     }
 
     #[getter]
@@ -156,4 +157,35 @@ impl Objective<f64> for PyObjective {
                 .expect("PyObjective callable returned non-float; surface this in v0.4")
         })
     }
+}
+
+/// Low-discrepancy points scaled to the supplied box bounds.
+#[pyfunction]
+#[pyo3(signature = (low, high, n, skip = 1))]
+pub fn low_discrepancy_points(
+    low: PyReadonlyArray1<'_, f64>,
+    high: PyReadonlyArray1<'_, f64>,
+    n: usize,
+    skip: u64,
+) -> PyResult<Vec<Vec<f64>>> {
+    let low = low.as_slice()?.to_vec();
+    let high = high.as_slice()?.to_vec();
+    if low.len() != high.len() {
+        return Err(PyValueError::new_err(
+            "low and high must have the same length",
+        ));
+    }
+    if low.is_empty() {
+        return Err(PyValueError::new_err(
+            "bounds must have at least one dimension",
+        ));
+    }
+    if low.iter().zip(high.iter()).any(|(&lo, &hi)| hi < lo) {
+        return Err(PyValueError::new_err(
+            "each upper bound must be greater than or equal to the lower bound",
+        ));
+    }
+    let bounds = Bounds::new(Array1::from_vec(low), Array1::from_vec(high), 0.0);
+    let points = crate::pointset::low_discrepancy_points(&bounds, n, skip);
+    Ok(points.outer_iter().map(|row| row.to_vec()).collect())
 }

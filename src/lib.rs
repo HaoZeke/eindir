@@ -6,33 +6,36 @@
 //! current revision is a structural scaffold; the typed component algebra
 //! lands in v0.3.0.
 
-/// Error types shared by all fallible operations in `eindir-core`.
-pub mod error;
-/// Typed component algebra (placeholder; populated in v0.3.0).
-pub mod types;
-/// Position-value pairs.
-pub mod fpair;
 /// Box bounds on N-dimensional points.
 pub mod bounds;
+/// Error types shared by all fallible operations in `eindir-core`.
+pub mod error;
+/// C ABI surface, gated behind the `capi` Cargo feature.
+#[cfg(feature = "capi")]
+pub mod ffi;
+/// Position-value pairs.
+pub mod fpair;
 /// The `Objective` trait: typed `S -> R` map with bounds and optional known minimum.
 pub mod objective;
 /// Builtin objective-function implementations for benchmarking and tests.
 pub mod objectives;
-/// Dimension-collapse and Chebyshev surrogate `Obj`-transforms.
-pub mod reduced;
-/// C ABI surface, gated behind the `capi` Cargo feature.
-#[cfg(feature = "capi")]
-pub mod ffi;
-/// pyo3 bindings for `eindir._core`, gated behind the `python` Cargo feature.
-#[cfg(feature = "python")]
-pub mod python;
+/// Low-discrepancy point sets for bounded numerical objectives.
+pub mod pointset;
 /// Adapter wrapping a Python callable into the Rust `Objective<f64>` trait.
 #[cfg(feature = "python")]
 pub mod py_objective;
+/// pyo3 bindings for `eindir._core`, gated behind the `python` Cargo feature.
+#[cfg(feature = "python")]
+pub mod python;
+/// Dimension-collapse and Chebyshev surrogate `Obj`-transforms.
+pub mod reduced;
+/// Typed component algebra (placeholder; populated in v0.3.0).
+pub mod types;
 
+pub use bounds::Bounds;
 pub use error::Error;
 pub use fpair::FPair;
-pub use bounds::Bounds;
 pub use objective::Objective;
-pub use objectives::{StybTang2D, Rastrigin, Rosenbrock, Ackley};
+pub use objectives::{Ackley, Rastrigin, Rosenbrock, StybTang2D};
+pub use pointset::{halton_points, halton_unit, low_discrepancy_points, radical_inverse};
 pub use reduced::{ChebyshevSurrogate, ReducedObjective};
