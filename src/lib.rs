@@ -37,5 +37,8 @@ pub use error::Error;
 pub use fpair::FPair;
 pub use objective::Objective;
 pub use objectives::{Ackley, Rastrigin, Rosenbrock, StybTang2D};
-pub use pointset::{halton_points, halton_unit, low_discrepancy_points, radical_inverse};
+pub use pointset::{
+    boundary_anchored_low_discrepancy_points, halton_points, halton_unit,
+    low_discrepancy_points, radical_inverse,
+};
 pub use reduced::{ChebyshevSurrogate, ReducedObjective};

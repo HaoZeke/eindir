@@ -87,3 +87,48 @@ pub fn halton_points(bounds: &Bounds<f64>, n: usize, skip: u64) -> Array2<f64> {
 pub fn low_discrepancy_points(bounds: &Bounds<f64>, n: usize, skip: u64) -> Array2<f64> {
     halton_points(bounds, n, skip)
 }
+
+fn vertex_count_for_design(dim: usize, n: usize) -> Option<usize> {
+    if dim >= usize::BITS as usize {
+        return None;
+    }
+    let count = 1usize << dim;
+    (count <= n).then_some(count)
+}
+
+/// Boundary-anchored bounded low-discrepancy design.
+///
+/// The design starts with all box vertices when the requested size can hold
+/// them. For larger boxes it anchors the two diagonal vertices and keeps the
+/// remaining rows as the Halton design.
+pub fn boundary_anchored_low_discrepancy_points(
+    bounds: &Bounds<f64>,
+    n: usize,
+    skip: u64,
+) -> Array2<f64> {
+    let mut out = halton_points(bounds, n, skip);
+    if n == 0 {
+        return out;
+    }
+    if let Some(vertex_count) = vertex_count_for_design(bounds.dims, n) {
+        for row in 0..vertex_count {
+            for axis in 0..bounds.dims {
+                out[[row, axis]] = if ((row >> axis) & 1) == 0 {
+                    bounds.low[axis]
+                } else {
+                    bounds.high[axis]
+                };
+            }
+        }
+        return out;
+    }
+    for axis in 0..bounds.dims {
+        out[[0, axis]] = bounds.low[axis];
+    }
+    if n > 1 {
+        for axis in 0..bounds.dims {
+            out[[1, axis]] = bounds.high[axis];
+        }
+    }
+    out
+}
