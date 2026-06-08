@@ -11,7 +11,7 @@
 //! (`ChebyshevSurrogate`). Because both are objectives, the same collapse and
 //! surrogate serve every point of the algebra at once.
 
-use crate::{Bounds, Objective};
+use crate::{gradient::Gradient, Bounds, Objective};
 use ndarray::{Array1, Array2, ArrayView1};
 
 /// Affine dimension-collapse of an inner objective onto a `k`-dimensional box.
@@ -220,6 +220,29 @@ impl Objective<f64> for ChebyshevSurrogate {
     }
 }
 
+impl Gradient<f64> for ChebyshevSurrogate {
+    fn grad(&self, x: ArrayView1<f64>) -> Array1<f64> {
+        // Delegate to the existing analytic implementation (Ceres-style
+        // native gradient).  The inherent `grad` remains for back-compat.
+        ChebyshevSurrogate::grad(self, x)
+    }
+    fn dim(&self) -> usize {
+        self.bounds.dims
+    }
+}
+
+impl<O: Objective<f64> + Gradient<f64>> Gradient<f64> for ReducedObjective<O> {
+    fn grad(&self, r: ArrayView1<f64>) -> Array1<f64> {
+        // Chain rule through the affine decoder: g_r = W^T @ g_full(decode(r))
+        let x = self.decode(r);
+        let g_full = self.inner.grad(x.view());
+        self.basis.t().dot(&g_full)
+    }
+    fn dim(&self) -> usize {
+        self.bounds.dims
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -238,7 +261,7 @@ mod tests {
         let origin = array![0.0, 0.0];
         let basis = Array2::from_shape_vec((2, 1), vec![1.0, 1.0]).unwrap();
         let reduced = ReducedObjective::new(inner, origin, basis, reduced_box(1, -5.0, 5.0));
-        assert_eq!(reduced.dim(), 1);
+        assert_eq!(Objective::dim(&reduced), 1);
         // Decode is the diagonal lift.
         let x = reduced.decode(array![2.0].view());
         assert!((x[0] - 2.0).abs() < 1e-12 && (x[1] - 2.0).abs() < 1e-12);

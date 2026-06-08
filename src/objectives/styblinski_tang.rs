@@ -1,6 +1,6 @@
 //! Styblinski-Tang 2D: a non-convex benchmark with a single global minimum.
 
-use crate::{Bounds, FPair, Objective};
+use crate::{gradient::Gradient, Bounds, FPair, Objective};
 use ndarray::{Array1, ArrayView1};
 use std::sync::OnceLock;
 
@@ -54,5 +54,16 @@ impl Objective<f64> for StybTang2D {
             pos: Array1::from_vec(vec![-2.903534, -2.903534]),
             val: -39.16599 * 2.0,
         }))
+    }
+}
+
+impl Gradient<f64> for StybTang2D {
+    fn grad(&self, x: ArrayView1<f64>) -> Array1<f64> {
+        // Analytic gradient of the normalized Styblinski-Tang.
+        // f = 1/2 * sum (x^4 -16x^2 +5x)  =>  df/dxi = 2x^3 -16x +2.5
+        x.mapv(|xi| 2.0 * xi.powi(3) - 16.0 * xi + 2.5)
+    }
+    fn dim(&self) -> usize {
+        2
     }
 }

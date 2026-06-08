@@ -17,6 +17,10 @@ pub mod ffi;
 pub mod fpair;
 /// The `Objective` trait: typed `S -> R` map with bounds and optional known minimum.
 pub mod objective;
+/// Gradient trait and adapters (Analytic / FiniteDiff) plus
+/// `DifferentiableObjective`.  "Native" gradients when the caller can
+/// supply them (Ceres-style); explicit FD fallback otherwise.
+pub mod gradient;
 /// Builtin objective-function implementations for benchmarking and tests.
 pub mod objectives;
 /// Low-discrepancy point sets for bounded numerical objectives.
@@ -40,6 +44,7 @@ pub use bounds::Bounds;
 pub use error::Error;
 pub use fpair::FPair;
 pub use objective::Objective;
+pub use gradient::{AnalyticGradient, DifferentiableObjective, FiniteDiffGradient, Gradient};
 pub use objectives::{Ackley, Rastrigin, Rosenbrock, StybTang2D};
 pub use pointset::{
     boundary_anchored_low_discrepancy_points, halton_points, halton_unit,

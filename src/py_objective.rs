@@ -8,9 +8,9 @@
 //! zero-copy path can replace this in v0.4 once the workspace settles on a
 //! single ndarray version end-to-end.
 
-use crate::{Bounds, FPair, Objective};
+use crate::{gradient::Gradient, Bounds, FPair, Objective};
 use ndarray::{Array1, ArrayView1};
-use numpy::{PyArray1, PyReadonlyArray1};
+use numpy::{PyArray1, PyArrayMethods, PyReadonlyArray1};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
@@ -97,9 +97,14 @@ impl PyFPair {
 /// Wraps a Python callable into the Rust `Objective<f64>` trait so the
 /// SA driver loop can call user-defined Python objectives without leaving
 /// Rust per evaluation.
+///
+/// When `grad_fn` is supplied at construction the object also implements
+/// `Gradient<f64>` (native / analytic gradient, Ceres-style).  If absent,
+/// wrap with `FiniteDiffGradient` for the fallback.
 #[pyclass(name = "PyObjective", unsendable)]
 pub struct PyObjective {
     inner: Py<PyAny>,
+    grad: Option<Py<PyAny>>,
     bounds: Bounds<f64>,
     dim: usize,
 }
@@ -107,10 +112,12 @@ pub struct PyObjective {
 #[pymethods]
 impl PyObjective {
     #[new]
-    fn new(fn_: Py<PyAny>, bounds: PyBounds) -> Self {
+    #[pyo3(signature = (fn_, bounds, grad_fn = None))]
+    fn new(fn_: Py<PyAny>, bounds: PyBounds, grad_fn: Option<Py<PyAny>>) -> Self {
         let dim = bounds.inner.dims;
         Self {
             inner: fn_,
+            grad: grad_fn,
             bounds: bounds.inner,
             dim,
         }
@@ -121,6 +128,21 @@ impl PyObjective {
         let py_arr = PyArray1::from_slice(py, slice);
         let r = self.inner.call1(py, (py_arr,))?;
         r.extract::<f64>(py)
+    }
+
+    /// Native gradient (if one was supplied at construction).  Raises if
+    /// this PyObjective has no grad_fn; callers should use
+    /// FiniteDiffGradient in that case.
+    fn grad<'py>(&self, py: Python<'py>, x: PyReadonlyArray1<'py, f64>) -> PyResult<Bound<'py, PyArray1<f64>>> {
+        let Some(g) = &self.grad else {
+            return Err(PyValueError::new_err(
+                "PyObjective was constructed without a grad_fn; supply grad_fn=... for native gradients (Ceres style) or wrap with FiniteDiffGradient",
+            ));
+        };
+        let slice = x.as_slice()?;
+        let py_arr = PyArray1::from_slice(py, slice);
+        let r = g.call1(py, (py_arr,))?;
+        r.extract::<Bound<'py, PyArray1<f64>>>(py)
     }
 
     #[getter]
@@ -156,6 +178,35 @@ impl Objective<f64> for PyObjective {
             r.extract::<f64>(py)
                 .expect("PyObjective callable returned non-float; surface this in v0.4")
         })
+    }
+}
+
+impl Gradient<f64> for PyObjective {
+    fn grad(&self, x: ArrayView1<f64>) -> Array1<f64> {
+        if let Some(gfn) = &self.grad {
+            Python::attach(|py| {
+                let owned: Vec<f64> = x.iter().copied().collect();
+                let py_arr = PyArray1::from_vec(py, owned);
+                let r = gfn
+                    .call1(py, (py_arr,))
+                    .expect("PyObjective grad callable raised");
+                // Bridge back (same copy style as value path; can be upgraded
+                // to dlpk zero-copy together with the value path).
+                let arr: Bound<PyArray1<f64>> = r
+                    .extract(py)
+                    .expect("grad callable must return array-like of f64");
+                let ro = arr.readonly();
+                Array1::from_vec(ro.as_slice().expect("contiguous").to_vec())
+            })
+        } else {
+            panic!(
+                "this PyObjective has no native gradient (constructed without grad_fn); \
+                 use FiniteDiffGradient or supply one at construction (Ceres-style native grad)"
+            );
+        }
+    }
+    fn dim(&self) -> usize {
+        self.dim
     }
 }
 

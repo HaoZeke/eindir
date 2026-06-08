@@ -19,7 +19,7 @@
 //! at native CUTEst sizes. A Metropolis accept against the true objective
 //! debiases the mean-field error when the objective is not separable.
 
-use crate::{Bounds, Objective};
+use crate::{gradient::Gradient, Bounds, Objective};
 use ndarray::{Array1, Array2, ArrayView1, ArrayView2};
 use rand::Rng;
 
@@ -359,6 +359,17 @@ impl Objective<f64> for AdditiveSurrogate {
         &self.bounds
     }
 
+    fn dim(&self) -> usize {
+        self.bounds.dims
+    }
+}
+
+impl Gradient<f64> for AdditiveSurrogate {
+    fn grad(&self, x: ArrayView1<f64>) -> Array1<f64> {
+        // The public `gradient` method is the analytic native gradient
+        // (Ceres style).  We delegate for the trait.
+        self.gradient(x)
+    }
     fn dim(&self) -> usize {
         self.bounds.dims
     }

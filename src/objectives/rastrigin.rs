@@ -1,6 +1,6 @@
 //! N-dimensional Rastrigin: highly multimodal benchmark.
 
-use crate::{Bounds, FPair, Objective};
+use crate::{gradient::Gradient, Bounds, FPair, Objective};
 use ndarray::{Array1, ArrayView1};
 use std::sync::OnceLock;
 
@@ -57,5 +57,16 @@ impl<const D: usize> Objective<f64> for Rastrigin<D> {
             pos: Array1::zeros(D),
             val: 0.0,
         }))
+    }
+}
+
+impl<const D: usize> Gradient<f64> for Rastrigin<D> {
+    fn grad(&self, x: ArrayView1<f64>) -> Array1<f64> {
+        // grad_i = 2 x_i + 2 π A sin(2 π x_i)
+        let two_pi = 2.0 * std::f64::consts::PI;
+        x.mapv(|xi| 2.0 * xi + 2.0 * std::f64::consts::PI * Self::A * (two_pi * xi).sin())
+    }
+    fn dim(&self) -> usize {
+        D
     }
 }

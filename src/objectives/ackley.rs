@@ -1,6 +1,6 @@
 //! N-dimensional Ackley: nearly flat outer region with a deep central well.
 
-use crate::{Bounds, FPair, Objective};
+use crate::{gradient::Gradient, Bounds, FPair, Objective};
 use ndarray::{Array1, ArrayView1};
 use std::sync::OnceLock;
 
@@ -58,5 +58,35 @@ impl<const D: usize> Objective<f64> for Ackley<D> {
             pos: Array1::zeros(D),
             val: 0.0,
         }))
+    }
+}
+
+impl<const D: usize> Gradient<f64> for Ackley<D> {
+    fn grad(&self, x: ArrayView1<f64>) -> Array1<f64> {
+        let n = D as f64;
+        let sum_sq: f64 = x.iter().map(|xi| xi.powi(2)).sum();
+        let s = (sum_sq / n).sqrt();
+        let two_pi = 2.0 * std::f64::consts::PI;
+        let sum_cos: f64 = x.iter().map(|xi| (two_pi * xi).cos()).sum();
+        let avg_cos = sum_cos / n;
+
+        let exp_term1 = (-Self::B * s).exp();
+        let exp_term2 = avg_cos.exp();
+
+        let mut g = Array1::<f64>::zeros(D);
+        let scale1 = if s > 1e-300 {
+            Self::A * Self::B / (s * n) * exp_term1
+        } else {
+            0.0
+        };
+        let scale2 = (2.0 * std::f64::consts::PI / n) * exp_term2;
+
+        for (i, &xi) in x.iter().enumerate() {
+            g[i] = scale1 * xi + scale2 * (two_pi * xi).sin();
+        }
+        g
+    }
+    fn dim(&self) -> usize {
+        D
     }
 }
