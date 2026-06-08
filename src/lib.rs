@@ -26,7 +26,7 @@ pub mod objectives;
 /// Low-discrepancy point sets for bounded numerical objectives.
 pub mod pointset;
 /// Adapter wrapping a Python callable into the Rust `Objective<f64>` trait.
-#[cfg(feature = "python")]
+#[cfg(any(feature = "python", feature = "py-objective"))]
 pub mod py_objective;
 /// pyo3 bindings for `eindir._core`, gated behind the `python` Cargo feature.
 #[cfg(feature = "python")]
