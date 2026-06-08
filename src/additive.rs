@@ -179,7 +179,11 @@ impl AdditiveSurrogate {
         for j in 0..dim {
             let span = {
                 let w = high[j] - low[j];
-                if w > 0.0 { w } else { 1.0 }
+                if w > 0.0 {
+                    w
+                } else {
+                    1.0
+                }
             };
             let mut d = Array2::<f64>::zeros((n, degree));
             for i in 0..n {
@@ -288,22 +292,48 @@ impl AdditiveSurrogate {
             for (g, e) in energy.iter_mut().enumerate() {
                 let frac = g as f64 / (grid_m - 1) as f64;
                 let t = 2.0 * frac - 1.0;
-                *e = cheb_basis(t, self.degree).dot(&self.coeffs.row(j));
-                emin = emin.min(*e);
+                let value = cheb_basis(t, self.degree).dot(&self.coeffs.row(j));
+                *e = value;
+                if value.is_finite() {
+                    emin = emin.min(value);
+                }
+            }
+            if !emin.is_finite() {
+                for s in 0..n {
+                    out[[s, j]] = lo + rng.random::<f64>() * span;
+                }
+                continue;
             }
             // tempered weights and their normalised CDF
             let mut cdf = vec![0.0f64; grid_m];
             let mut acc = 0.0;
             for g in 0..grid_m {
-                let z = ((energy[g] - emin) / temp).clamp(0.0, 700.0);
-                acc += (-z).exp();
+                let weight = if energy[g].is_finite() {
+                    let z = ((energy[g] - emin) / temp).clamp(0.0, 700.0);
+                    (-z).exp()
+                } else {
+                    0.0
+                };
+                if weight.is_finite() {
+                    acc += weight;
+                }
                 cdf[g] = acc;
             }
-            let cell = if grid_m > 1 { span / (grid_m - 1) as f64 } else { span };
+            if !acc.is_finite() || acc <= 0.0 {
+                for s in 0..n {
+                    out[[s, j]] = lo + rng.random::<f64>() * span;
+                }
+                continue;
+            }
+            let cell = if grid_m > 1 {
+                span / (grid_m - 1) as f64
+            } else {
+                span
+            };
             for s in 0..n {
                 let u = rng.random::<f64>() * acc;
                 // first grid index with cdf >= u
-                let mut idx = match cdf.binary_search_by(|v| v.partial_cmp(&u).unwrap()) {
+                let mut idx = match cdf.binary_search_by(|v| v.total_cmp(&u)) {
                     Ok(i) => i,
                     Err(i) => i,
                 };
@@ -337,8 +367,8 @@ impl Objective<f64> for AdditiveSurrogate {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::SeedableRng;
     use rand::rngs::StdRng;
+    use rand::SeedableRng;
 
     fn box_bounds(dim: usize, lo: f64, hi: f64) -> Bounds<f64> {
         Bounds::new(Array1::from_elem(dim, lo), Array1::from_elem(dim, hi), 0.0)
@@ -346,7 +376,10 @@ mod tests {
 
     // Styblinski-Tang is separable: 0.5 sum(x^4 - 16 x^2 + 5 x).
     fn styb(x: ArrayView1<f64>) -> f64 {
-        0.5 * x.iter().map(|&v| v.powi(4) - 16.0 * v * v + 5.0 * v).sum::<f64>()
+        0.5 * x
+            .iter()
+            .map(|&v| v.powi(4) - 16.0 * v * v + 5.0 * v)
+            .sum::<f64>()
     }
 
     #[test]
