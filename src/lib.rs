@@ -29,6 +29,8 @@ pub mod py_objective;
 pub mod python;
 /// Dimension-collapse and Chebyshev surrogate `Obj`-transforms.
 pub mod reduced;
+/// Separable rank-1 surrogate and its tempered independence sampler.
+pub mod additive;
 /// Typed component algebra (placeholder; populated in v0.3.0).
 pub mod types;
 
@@ -41,4 +43,5 @@ pub use pointset::{
     boundary_anchored_low_discrepancy_points, halton_points, halton_unit,
     low_discrepancy_points, radical_inverse,
 };
+pub use additive::AdditiveSurrogate;
 pub use reduced::{ChebyshevSurrogate, ReducedObjective};
