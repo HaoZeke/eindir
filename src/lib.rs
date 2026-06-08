@@ -31,6 +31,8 @@ pub mod python;
 pub mod reduced;
 /// Separable rank-1 surrogate and its tempered independence sampler.
 pub mod additive;
+/// Generalized Langevin equation colored-noise thermostat (optimal sampling).
+pub mod gle;
 /// Typed component algebra (placeholder; populated in v0.3.0).
 pub mod types;
 
@@ -44,4 +46,5 @@ pub use pointset::{
     low_discrepancy_points, radical_inverse,
 };
 pub use additive::AdditiveSurrogate;
+pub use gle::{ldl_sqrt, matrix_exp, optimal_sampling_drift, GleThermostat};
 pub use reduced::{ChebyshevSurrogate, ReducedObjective};
