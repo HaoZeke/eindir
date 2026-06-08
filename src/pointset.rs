@@ -120,6 +120,11 @@ pub fn boundary_anchored_low_discrepancy_points(
                 };
             }
         }
+        if vertex_count < n {
+            for axis in 0..bounds.dims {
+                out[[vertex_count, axis]] = 0.5 * (bounds.low[axis] + bounds.high[axis]);
+            }
+        }
         return out;
     }
     for axis in 0..bounds.dims {
@@ -128,6 +133,11 @@ pub fn boundary_anchored_low_discrepancy_points(
     if n > 1 {
         for axis in 0..bounds.dims {
             out[[1, axis]] = bounds.high[axis];
+        }
+    }
+    if n > 2 {
+        for axis in 0..bounds.dims {
+            out[[2, axis]] = 0.5 * (bounds.low[axis] + bounds.high[axis]);
         }
     }
     out

@@ -40,12 +40,13 @@ fn boundary_anchored_points_start_with_vertices_when_the_design_fits() {
         0.0,
     );
 
-    let points = boundary_anchored_low_discrepancy_points(&bounds, 4, 1);
+    let points = boundary_anchored_low_discrepancy_points(&bounds, 5, 1);
 
     assert_eq!(points.row(0).to_vec(), vec![-1.0, -2.0]);
     assert_eq!(points.row(1).to_vec(), vec![1.0, -2.0]);
     assert_eq!(points.row(2).to_vec(), vec![-1.0, 2.0]);
     assert_eq!(points.row(3).to_vec(), vec![1.0, 2.0]);
+    assert_eq!(points.row(4).to_vec(), vec![0.0, 0.0]);
 }
 
 #[test]
@@ -60,6 +61,7 @@ fn boundary_anchored_points_use_diagonal_vertices_for_large_vertex_sets() {
 
     assert_eq!(points.row(0).to_vec(), vec![-1.0, -2.0, -3.0]);
     assert_eq!(points.row(1).to_vec(), vec![1.0, 2.0, 3.0]);
+    assert_eq!(points.row(2).to_vec(), vec![0.0, 0.0, 0.0]);
     for row in points.outer_iter() {
         assert!(bounds.contains(row));
     }
