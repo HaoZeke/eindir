@@ -1,5 +1,5 @@
 //! pyo3 entry point for `eindir._core`. Re-exports the package version and
-//! typed bindings (FPair, Bounds, PyObjective) introduced in v0.3.0.
+//! typed bindings for FPair, Bounds, PyObjective, and point sets.
 
 use pyo3::prelude::*;
 

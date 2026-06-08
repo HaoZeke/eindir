@@ -4,9 +4,7 @@
 //! eindir-core uses ndarray 0.17. To avoid an ABI mismatch between the two
 //! ndarray copies, we cross the pyo3 boundary as `&[f64]` / `Vec<f64>` and
 //! reconstruct ndarray 0.17 `Array1<f64>` / `ArrayView1<f64>` on the Rust
-//! side via `Array1::from_vec` / `ArrayView1::from`. The dlpk-backed
-//! zero-copy path can replace this in v0.4 once the workspace settles on a
-//! single ndarray version end-to-end.
+//! side via `Array1::from_vec` / `ArrayView1::from`.
 
 use crate::{gradient::Gradient, Bounds, FPair, Objective};
 use ndarray::{Array1, ArrayView1};
@@ -99,8 +97,8 @@ impl PyFPair {
 /// Rust per evaluation.
 ///
 /// When `grad_fn` is supplied at construction the object also implements
-/// `Gradient<f64>` (native / analytic gradient, Ceres-style).  If absent,
-/// wrap with `FiniteDiffGradient` for the fallback.
+/// `Gradient<f64>` (native / analytic gradient, Ceres-style). Without a
+/// supplied gradient, callers use `FiniteDiffGradient` explicitly.
 #[pyclass(name = "PyObjective", unsendable)]
 pub struct PyObjective {
     inner: Py<PyAny>,
@@ -133,7 +131,11 @@ impl PyObjective {
     /// Native gradient (if one was supplied at construction).  Raises if
     /// this PyObjective has no grad_fn; callers should use
     /// FiniteDiffGradient in that case.
-    fn grad<'py>(&self, py: Python<'py>, x: PyReadonlyArray1<'py, f64>) -> PyResult<Bound<'py, PyArray1<f64>>> {
+    fn grad<'py>(
+        &self,
+        py: Python<'py>,
+        x: PyReadonlyArray1<'py, f64>,
+    ) -> PyResult<Bound<'py, PyArray1<f64>>> {
         let Some(g) = &self.grad else {
             return Err(PyValueError::new_err(
                 "PyObjective was constructed without a grad_fn; supply grad_fn=... for native gradients (Ceres style) or wrap with FiniteDiffGradient",
@@ -174,9 +176,9 @@ impl Objective<f64> for PyObjective {
             let r = self
                 .inner
                 .call1(py, (py_arr,))
-                .expect("PyObjective callable raised; surface this via PyErr instead in v0.4");
+                .expect("PyObjective callable raised");
             r.extract::<f64>(py)
-                .expect("PyObjective callable returned non-float; surface this in v0.4")
+                .expect("PyObjective callable returned non-float")
         })
     }
 }
@@ -190,8 +192,6 @@ impl Gradient<f64> for PyObjective {
                 let r = gfn
                     .call1(py, (py_arr,))
                     .expect("PyObjective grad callable raised");
-                // Bridge back (same copy style as value path; can be upgraded
-                // to dlpk zero-copy together with the value path).
                 let arr: Bound<PyArray1<f64>> = r
                     .extract(py)
                     .expect("grad callable must return array-like of f64");
