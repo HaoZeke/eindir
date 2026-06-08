@@ -432,4 +432,25 @@ mod tests {
             "low-T sample mean {mean0} not near the well -2.9035"
         );
     }
+
+    #[test]
+    fn tempered_sample_handles_nonfinite_axis_energy() {
+        let dim = 2;
+        let bounds = box_bounds(dim, -1.0, 1.0);
+        let surr = AdditiveSurrogate {
+            bounds,
+            intercept: 0.0,
+            coeffs: Array2::from_shape_vec((dim, 2), vec![f64::NAN, 0.0, 0.0, 0.0]).unwrap(),
+            col_means: Array2::zeros((dim, 2)),
+            degree: 2,
+        };
+        let mut rng = StdRng::seed_from_u64(3);
+
+        let draws = surr.sample(32, 0.5, 17, &mut rng);
+
+        assert_eq!(draws.nrows(), 32);
+        assert_eq!(draws.ncols(), dim);
+        assert!(draws.iter().all(|v| v.is_finite()));
+        assert!(draws.iter().all(|v| (-1.0..=1.0).contains(v)));
+    }
 }
