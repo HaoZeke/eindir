@@ -20,7 +20,7 @@
 //! the noise factor is an LDL^T square root, so no linear-algebra backend is
 //! needed.
 
-use ndarray::{Array1, Array2, ArrayViewMut2};
+use ndarray::{Array2, ArrayViewMut2};
 use rand::Rng;
 use rand_distr::StandardNormal;
 
