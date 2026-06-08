@@ -79,7 +79,10 @@ pub fn ldl_sqrt(m: &Array2<f64>) -> Array2<f64> {
         d[i] = dii;
     }
     // S = L D^{1/2}: column j is scaled by sqrt(d[j]) (zeroing negative pivots).
-    let sqrt_d: Vec<f64> = d.iter().map(|&v| if v > 0.0 { v.sqrt() } else { 0.0 }).collect();
+    let sqrt_d: Vec<f64> = d
+        .iter()
+        .map(|&v| if v > 0.0 { v.sqrt() } else { 0.0 })
+        .collect();
     let mut s = Array2::<f64>::zeros((n, n));
     for i in 0..n {
         for j in 0..=i {
@@ -211,17 +214,22 @@ pub fn optimal_sampling_drift(omega0: f64) -> Array2<f64> {
 mod tests {
     use super::*;
     use ndarray::Array1;
-    use rand::SeedableRng;
     use rand::rngs::StdRng;
+    use rand::SeedableRng;
 
     #[test]
     fn matrix_exp_diagonal_and_zero() {
         let z = Array2::<f64>::zeros((3, 3));
         let e0 = matrix_exp(&z, 20, 10);
-        assert!((&e0 - &Array2::<f64>::eye(3)).iter().all(|v| v.abs() < 1e-12));
+        assert!((&e0 - &Array2::<f64>::eye(3))
+            .iter()
+            .all(|v| v.abs() < 1e-12));
         let d = Array2::from_diag(&Array1::from_vec(vec![0.5, -1.0, 2.0]));
         let ed = matrix_exp(&d, 20, 10);
-        for (i, val) in [0.5f64.exp(), (-1.0f64).exp(), 2.0f64.exp()].iter().enumerate() {
+        for (i, val) in [0.5f64.exp(), (-1.0f64).exp(), 2.0f64.exp()]
+            .iter()
+            .enumerate()
+        {
             assert!((ed[[i, i]] - val).abs() < 1e-10, "exp diag {i}");
         }
     }
@@ -245,7 +253,10 @@ mod tests {
             assert!(sym[[i, i]] >= -1e-12, "diagonal {i} negative");
             for j in 0..sym.ncols() {
                 if i != j {
-                    assert!(sym[[i, j]].abs() < 1e-12, "off-diagonal not skew at {i},{j}");
+                    assert!(
+                        sym[[i, j]].abs() < 1e-12,
+                        "off-diagonal not skew at {i},{j}"
+                    );
                 }
             }
         }
@@ -272,6 +283,9 @@ mod tests {
         }
         var0 /= trials as f64;
         // physical-momentum variance stays at temperature (canonical)
-        assert!((var0 - temp).abs() < 0.05, "momentum variance drifted: {var0}");
+        assert!(
+            (var0 - temp).abs() < 0.05,
+            "momentum variance drifted: {var0}"
+        );
     }
 }
