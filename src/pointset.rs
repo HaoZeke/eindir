@@ -1,6 +1,8 @@
 //! Low-discrepancy point sets for bounded numerical objectives.
 
-use ndarray::{Array1, Array2};
+use ndarray::{Array1, Array2, ArrayView1};
+use rand::rngs::StdRng;
+use rand::{Rng, SeedableRng};
 
 use crate::Bounds;
 
@@ -86,6 +88,51 @@ pub fn halton_points(bounds: &Bounds<f64>, n: usize, skip: u64) -> Array2<f64> {
 /// Default bounded low-discrepancy design used by optimization front-ends.
 pub fn low_discrepancy_points(bounds: &Bounds<f64>, n: usize, skip: u64) -> Array2<f64> {
     halton_points(bounds, n, skip)
+}
+
+/// Shifted Halton point set scaled to the supplied box bounds.
+///
+/// The shift is applied in the unit hypercube modulo one, then scaled to the
+/// target box. This gives a deterministic replicated design for randomized-QMC
+/// style restarts while preserving bounded points.
+pub fn shifted_halton_points(
+    bounds: &Bounds<f64>,
+    n: usize,
+    skip: u64,
+    shift: ArrayView1<'_, f64>,
+) -> Array2<f64> {
+    assert_eq!(
+        shift.len(),
+        bounds.dims,
+        "shift dimension must match bounds dimension"
+    );
+    let mut out = Array2::<f64>::zeros((n, bounds.dims));
+    for row in 0..n {
+        let unit = halton_unit(skip + row as u64, bounds.dims);
+        for axis in 0..bounds.dims {
+            let width = bounds.high[axis] - bounds.low[axis];
+            assert!(width >= 0.0, "bounds require high >= low on every axis");
+            let shifted = (unit[axis] + shift[axis]).fract();
+            out[[row, axis]] = bounds.low[axis] + width * shifted;
+        }
+    }
+    out
+}
+
+/// Deterministically shifted bounded low-discrepancy design.
+///
+/// The supplied seed chooses a reproducible Cranley-Patterson style shift in
+/// the unit hypercube. Different seeds give independent replicas of the same
+/// underlying low-discrepancy design.
+pub fn shifted_low_discrepancy_points(
+    bounds: &Bounds<f64>,
+    n: usize,
+    skip: u64,
+    seed: u64,
+) -> Array2<f64> {
+    let mut rng = StdRng::seed_from_u64(seed);
+    let shift = Array1::from_iter((0..bounds.dims).map(|_| rng.random::<f64>()));
+    shifted_halton_points(bounds, n, skip, shift.view())
 }
 
 fn vertex_count_for_design(dim: usize, n: usize) -> Option<usize> {

@@ -3,7 +3,9 @@
 
 use pyo3::prelude::*;
 
-use crate::py_objective::{low_discrepancy_points, PyBounds, PyFPair, PyObjective};
+use crate::py_objective::{
+    low_discrepancy_points, shifted_low_discrepancy_points, PyBounds, PyFPair, PyObjective,
+};
 
 /// pyo3 module initialiser. Exposed to Python as `eindir._core`.
 #[pymodule]
@@ -13,5 +15,6 @@ fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyFPair>()?;
     m.add_class::<PyObjective>()?;
     m.add_function(wrap_pyfunction!(low_discrepancy_points, m)?)?;
+    m.add_function(wrap_pyfunction!(shifted_low_discrepancy_points, m)?)?;
     Ok(())
 }

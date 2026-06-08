@@ -189,3 +189,35 @@ pub fn low_discrepancy_points(
     let points = crate::pointset::low_discrepancy_points(&bounds, n, skip);
     Ok(points.outer_iter().map(|row| row.to_vec()).collect())
 }
+
+/// Deterministically shifted low-discrepancy points scaled to box bounds.
+#[pyfunction]
+#[pyo3(signature = (low, high, n, skip = 1, seed = 0))]
+pub fn shifted_low_discrepancy_points(
+    low: PyReadonlyArray1<'_, f64>,
+    high: PyReadonlyArray1<'_, f64>,
+    n: usize,
+    skip: u64,
+    seed: u64,
+) -> PyResult<Vec<Vec<f64>>> {
+    let low = low.as_slice()?.to_vec();
+    let high = high.as_slice()?.to_vec();
+    if low.len() != high.len() {
+        return Err(PyValueError::new_err(
+            "low and high must have the same length",
+        ));
+    }
+    if low.is_empty() {
+        return Err(PyValueError::new_err(
+            "bounds must have at least one dimension",
+        ));
+    }
+    if low.iter().zip(high.iter()).any(|(&lo, &hi)| hi < lo) {
+        return Err(PyValueError::new_err(
+            "each upper bound must be greater than or equal to the lower bound",
+        ));
+    }
+    let bounds = Bounds::new(Array1::from_vec(low), Array1::from_vec(high), 0.0);
+    let points = crate::pointset::shifted_low_discrepancy_points(&bounds, n, skip, seed);
+    Ok(points.outer_iter().map(|row| row.to_vec()).collect())
+}

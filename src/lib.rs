@@ -43,7 +43,8 @@ pub use objective::Objective;
 pub use objectives::{Ackley, Rastrigin, Rosenbrock, StybTang2D};
 pub use pointset::{
     boundary_anchored_low_discrepancy_points, halton_points, halton_unit,
-    low_discrepancy_points, radical_inverse,
+    low_discrepancy_points, radical_inverse, shifted_halton_points,
+    shifted_low_discrepancy_points,
 };
 pub use additive::AdditiveSurrogate;
 pub use gle::{
