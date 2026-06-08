@@ -1,6 +1,6 @@
 use eindir_core::{
     boundary_anchored_low_discrepancy_points, low_discrepancy_points, radical_inverse,
-    Bounds,
+    shifted_low_discrepancy_points, Bounds,
 };
 use ndarray::Array1;
 
@@ -28,6 +28,26 @@ fn low_discrepancy_points_are_deterministic_and_bounded() {
     assert_eq!(first, second);
     assert_eq!(first.shape(), &[16, 2]);
     for row in first.outer_iter() {
+        assert!(bounds.contains(row));
+    }
+}
+
+#[test]
+fn shifted_low_discrepancy_points_are_replicated_and_bounded() {
+    let bounds = Bounds::new(
+        Array1::from_vec(vec![-1.0, -2.0]),
+        Array1::from_vec(vec![1.0, 2.0]),
+        0.0,
+    );
+
+    let shifted = shifted_low_discrepancy_points(&bounds, 16, 1, 7);
+    let repeated = shifted_low_discrepancy_points(&bounds, 16, 1, 7);
+    let base = low_discrepancy_points(&bounds, 16, 1);
+
+    assert_eq!(shifted, repeated);
+    assert_ne!(shifted, base);
+    assert_eq!(shifted.shape(), &[16, 2]);
+    for row in shifted.outer_iter() {
         assert!(bounds.contains(row));
     }
 }
