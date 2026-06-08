@@ -210,6 +210,7 @@ pub fn optimal_sampling_drift(omega0: f64) -> Array2<f64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ndarray::Array1;
     use rand::SeedableRng;
     use rand::rngs::StdRng;
 
