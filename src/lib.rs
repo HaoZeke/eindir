@@ -46,5 +46,7 @@ pub use pointset::{
     low_discrepancy_points, radical_inverse,
 };
 pub use additive::AdditiveSurrogate;
-pub use gle::{ldl_sqrt, matrix_exp, optimal_sampling_drift, GleThermostat};
+pub use gle::{
+    ldl_sqrt, matrix_exp, optimal_sampling_drift, GleThermostat, OPTIMAL_SAMPLING_NS,
+};
 pub use reduced::{ChebyshevSurrogate, ReducedObjective};

@@ -156,45 +156,53 @@ impl GleThermostat {
     }
 }
 
-/// Construct an optimal-sampling drift matrix over a target frequency band.
+/// Fitted optimal-sampling reference: six damped-oscillator baths `(Omega,
+/// Gamma, coupling)` over the normalised band `[1, 100]` (two decades). Each bath
+/// is a complex eigenvalue pair `-Gamma +/- i Omega` skew-coupled to the
+/// physical momentum, so its friction peaks near `Omega`; the frequencies,
+/// dampings and couplings were fit to maximise the worst normalised sampling
+/// efficiency `min_omega kappa(omega)/omega` across the band -- the gle4md
+/// procedure, reproduced by `anneal/experiments/colored_noise_sampling.py`. At
+/// the fitted optimum the worst efficiency is 0.13, against 0.07 for the best
+/// single white-noise friction: colored noise lifts the worst-sampled mode 1.8x.
+const OPTIMAL_SAMPLING_REF: [(f64, f64, f64); 6] = [
+    (4.008052, 90.290099, 0.833024),
+    (93.560269, 37.509324, 40.162773),
+    (49.838463, 16.822080, 13.008423),
+    (0.664421, 281.450678, 6.977272),
+    (148.046748, 79.296860, 0.552854),
+    (5.859307, 323.666216, 0.567559),
+];
+const OPTIMAL_SAMPLING_REF_ANCHOR: f64 = 0.664421;
+
+/// Number of auxiliary momenta in the fitted optimal-sampling drift.
+pub const OPTIMAL_SAMPLING_NS: usize = 2 * OPTIMAL_SAMPLING_REF.len();
+
+/// Build the fitted optimal-sampling drift, scaled to characteristic frequency
+/// `omega0` (the band becomes `[omega0, 100 omega0]`).
 ///
-/// Each of `ns` auxiliary degrees of freedom is a damped oscillator placed at a
-/// log-spaced frequency in `[omega_min, omega_max]`, coupled to the physical
-/// momentum by a skew block. The drift is `A = D + W` with `D` the diagonal
-/// dissipation (a small white friction on the physical momentum plus the
-/// per-bath rates `omega_k`) and `W` skew, so `A + A^T = 2 D` is positive
-/// semidefinite and the fluctuation-dissipation relation `A C + C A^T = B B^T`
-/// holds for `C = I` (canonical sampling) with a valid `B B^T = 2 D`. The
-/// Lorentzian friction each bath contributes peaks at its `omega_k`; spreading
-/// the baths log-uniformly flattens the friction -- hence the sampling
-/// efficiency -- across the band, the colored-noise analogue of critical
-/// damping over a whole spectrum rather than at one frequency.
-pub fn optimal_sampling_drift(omega_min: f64, omega_max: f64, ns: usize) -> Array2<f64> {
-    assert!(ns >= 1, "need at least one auxiliary DOF");
-    assert!(
-        omega_max > omega_min && omega_min > 0.0,
-        "require 0 < omega_min < omega_max"
-    );
-    let n = ns + 1;
+/// The drift has units of frequency, so the whole fitted reference scales
+/// linearly: `A(omega0) = omega0 * A_ref`. Each bath is a damped-oscillator
+/// block with eigenvalues `-Gamma +/- i Omega` skew-coupled to the physical
+/// momentum; the oscillator and coupling terms are skew, so `A + A^T` is
+/// diagonal and non-negative and the fluctuation-dissipation relation
+/// `A C + C A^T = B B^T` holds for `C = I` (canonical sampling). Spreading the
+/// baths across the band flattens the friction -- hence the sampling efficiency
+/// -- the colored-noise analogue of critical damping over a whole spectrum
+/// rather than at one frequency.
+pub fn optimal_sampling_drift(omega0: f64) -> Array2<f64> {
+    assert!(omega0 > 0.0, "omega0 must be positive");
+    let n = OPTIMAL_SAMPLING_NS + 1;
     let mut a = Array2::<f64>::zeros((n, n));
-    // log-spaced bath frequencies
-    let log_lo = omega_min.ln();
-    let log_hi = omega_max.ln();
-    // a small white friction anchors the physical-momentum dissipation
-    a[[0, 0]] = omega_min;
-    for k in 0..ns {
-        let frac = if ns == 1 {
-            0.5
-        } else {
-            k as f64 / (ns as f64 - 1.0)
-        };
-        let omega_k = (log_lo + frac * (log_hi - log_lo)).exp();
-        // coupling chosen so each bath contributes comparable friction area
-        let c_k = omega_k.sqrt() * (omega_max / omega_min).powf(1.0 / (2.0 * ns as f64));
-        let idx = k + 1;
-        a[[idx, idx]] = omega_k; // bath dissipation rate
-        a[[0, idx]] = c_k; // skew coupling: physical <- aux
-        a[[idx, 0]] = -c_k; // skew coupling: aux <- physical
+    a[[0, 0]] = OPTIMAL_SAMPLING_REF_ANCHOR * omega0;
+    for (k, &(omega_k, gamma_k, c_k)) in OPTIMAL_SAMPLING_REF.iter().enumerate() {
+        let (i1, i2) = (1 + 2 * k, 2 + 2 * k);
+        a[[i1, i1]] = gamma_k * omega0;
+        a[[i2, i2]] = gamma_k * omega0;
+        a[[i1, i2]] = -omega_k * omega0;
+        a[[i2, i1]] = omega_k * omega0;
+        a[[0, i1]] = c_k * omega0;
+        a[[i1, 0]] = -c_k * omega0;
     }
     a
 }
@@ -230,7 +238,7 @@ mod tests {
     fn optimal_drift_satisfies_fluctuation_dissipation() {
         // A + A^T must be PSD so that B B^T = A C + C A^T (C = I) is a valid
         // diffusion; the construction makes A + A^T diagonal and non-negative.
-        let a = optimal_sampling_drift(0.1, 10.0, 4);
+        let a = optimal_sampling_drift(1.0);
         let sym = &a + &a.t();
         for i in 0..sym.nrows() {
             assert!(sym[[i, i]] >= -1e-12, "diagonal {i} negative");
@@ -248,8 +256,8 @@ mod tests {
         // the covariance invariant: E[s' s'^T] = T C T^T + S S^T = C. Estimate
         // the covariance over many independent draws and check row 0 (the
         // physical momentum) keeps unit variance.
-        let a = optimal_sampling_drift(0.2, 5.0, 3);
-        let dt = 0.05;
+        let a = optimal_sampling_drift(1.0);
+        let dt = 0.01;
         let temp = 1.0;
         let gle = GleThermostat::canonical(&a, dt, temp, 1.0);
         let c = Array2::<f64>::eye(a.nrows()) * temp;
