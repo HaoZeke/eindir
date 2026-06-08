@@ -1,3 +1,4 @@
 #+TITLE: Specification
 
-Reserved for the typed component algebra (Spec 2, eindir v0.3.0).
+The crate exposes typed objective, bounds, gradient, surrogate, and GLE
+thermostat primitives used by =anneal= and by the Python extension.

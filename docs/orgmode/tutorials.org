@@ -31,9 +31,9 @@ print(eindir._core.__version__)
 
 * Bounds and FPair
 
-The =FPair= and =NumLimit= primitives exposed today match the legacy
-API surface; the typed Rust replacements land with v0.3.0 alongside
-the =anneal= component algebra.
+The =FPair= and =NumLimit= primitives expose bounds and objective metadata for
+Python callers. The Rust crate also exports typed bounds, objective, gradient,
+surrogate, and GLE thermostat primitives consumed by =anneal=.
 
 #+BEGIN_SRC python
 import numpy as np
