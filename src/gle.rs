@@ -167,7 +167,7 @@ impl GleThermostat {
 /// efficiency `min_omega kappa(omega)/omega` across the band -- the gle4md
 /// procedure, reproduced by `anneal/experiments/colored_noise_sampling.py`. At
 /// the fitted optimum the worst efficiency is 0.13, against 0.07 for the best
-/// single white-noise friction: colored noise lifts the worst-sampled mode 1.8x.
+/// single white-noise friction in the companion benchmark.
 const OPTIMAL_SAMPLING_REF: [(f64, f64, f64); 6] = [
     (4.008052, 90.290099, 0.833024),
     (93.560269, 37.509324, 40.162773),
