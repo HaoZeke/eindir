@@ -1,0 +1,28 @@
+#+TITLE: Best Practices
+#+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
+
+* Reuse the same Objective
+Define (or wrap) your f once.
+Pass the identical object to pilots, mixer, GLE, surrogates, polish, and anneal drivers.
+This is the source of the "one change serves all" property.
+
+* Prefer QMC starts when bounds are known
+=low_discrepancy_points= (with a stable skip) gives better coverage and reproducibility than random for the same budget.
+Use it for mixer chains, pilots, and polish.
+
+* GLE drift is reusable
+Fit (or use the default optimal-sampling) drift once; the same matrix can be used at any temperature / with any driver that accepts a GLE Move.
+Correctness is controlled by the covariance C you pass to sample_stationary; acceleration by the drift A.
+
+* Surrogates as first-class citizens
+An additive or Chebyshev surrogate can be treated as an Obj (cheap value) or as a Move (independence proposal).
+The Metropolis correction reports the best value against the true objective.
+Charge the pilot cost to the budget; the collapse never enters the accuracy accounting.
+
+* Python array API + DLPack
+When using device backends (via anneal), keep everything in the namespace supplied by the bounds array.
+Pass DLPack tensors for zero-copy handoff to other runtimes.
+
+* Test with the laws checker (when using via anneal)
+The =SaVariant= / =checked_with_sweep= in anneal will catch neighbourhood or acceptance-law violations early.
+Write your custom Obj/Neigh/Move/Accept so they satisfy L1-L4; the primitives here are already designed to do so.

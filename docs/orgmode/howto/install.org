@@ -1,0 +1,21 @@
+#+TITLE: Installation
+#+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
+
+* Python
+#+BEGIN_SRC bash
+pip install eindir
+#+END_SRC
+
+Optional extras for array API interop, etc. are pulled on demand when =RGPYCRUMBS_AUTO_DEPS=1= (or equivalent) is set, or pre-install via pixi.
+
+* Pixi (full stack, recommended for development + docs)
+#+BEGIN_SRC bash
+pixi install
+#+END_SRC
+
+* From source (Rust + Python)
+#+BEGIN_SRC bash
+cargo build --release
+cargo cinstall --release --prefix /usr/local   # for C/C++ consumers
+# Python: maturin develop --features python (or pixi run -e python python-build)
+#+END_SRC

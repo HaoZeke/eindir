@@ -1,0 +1,15 @@
+#+TITLE: FAQ
+#+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
+
+* How do I supply a gradient to GLE / HMC drivers?
+Implement =grad= on your Objective (or use =PyObjective= with a gradient callable).
+The GLE and HMC paths in anneal consume it; finite differences are used as fallback (charged as n_p+1 evals).
+
+* Can I use eindir primitives without anneal?
+Yes.
+The low-discrepancy, GLE thermostat, surrogates, and Objective trait are standalone and useful for any bounded global optimisation or sampling code.
+
+* What about C/C++ consumers?
+cargo-c produces the C ABI + pkg-config.
+The hand-written C++ header gives a namespace wrapper.
+See =include/eindir-core.hpp= and the bindings page.

@@ -1,0 +1,37 @@
+#+TITLE: Surrogates (additive, Chebyshev, reduced)
+#+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
+
+#+begin_export rst
+======================================
+Surrogates (additive, Chebyshev, reduced)
+======================================
+
+Surrogates give cheap values (and sometimes gradients) for pilots, dimension
+collapse, and independence proposals while the true objective is only
+evaluated for acceptance or the reported best.
+#+end_export
+
+* Additive (rank-1) surrogate
+
+Fits a separable model c + sum_j g_j(x_j) via backfitting on a pilot design.
+For separable objectives the tempered density factorises; one global draw places every coordinate at its own tempered optimum (O(d) cost, no curse of dimensionality).
+Metropolis correction on the true f removes bias.
+
+See =anneal.additive_independence= (uses eindir surrogates under the hood) and the rank-1 independence driver in the IISE manuscript.
+
+* Total-degree Chebyshev + active subspace
+
+ReducedObjective (active subspace from pilot gradient covariance) + total-degree Chebyshev on the reduced box.
+Supplies both cheap value and analytic gradient.
+
+Used for dimension collapse in high-D CUTEst runs and as a cheap Obj for HMC etc.
+
+* API surface (Python)
+
+#+begin_src python
+from eindir import AdditiveSurrogate, ChebyshevSurrogate, ReducedObjective
+# ... fit on pilot data, then use .eval(x) or pass to anneal drivers
+#+end_src
+
+The same fitted surrogate object can be read at the Obj slot (for cheap evals) or the Move slot (as an independence proposal, corrected by Metropolis on the true objective).
+This is the concrete unification payoff.

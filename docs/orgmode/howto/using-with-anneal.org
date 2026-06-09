@@ -1,0 +1,25 @@
+#+TITLE: Using with anneal
+#+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
+
+All =eindir= primitives are designed to be dropped straight into the five typed SA components (Obj, Cool, Neigh, Move, Accept) that =anneal= exposes.
+
+* Objective slot
+Any class implementing the =Objective= protocol (or a wrapped Python callable via =PyObjective=) can be used as the =Obj= for Boltzmann, Fast, Gsa, Bayesian mixer, GLE-Langevin, additive independence, QMC polish, HMC, PT, etc.
+
+* Low-discrepancy starts
+Use =low_discrepancy_points= (or =halton_unit=) for:
+- Mixer chain initialisation (when bounds known)
+- Bayesian pilot designs
+- QMC / shifted-QMC polish starts
+- Surrogate fitting designs
+
+* GLE Move
+The =GleThermostat= + =optimal_sampling_drift= from eindir is exactly what =anneal.gle_langevin= consumes for the coloured-noise Move.
+One fitted drift accelerates every gradient-capable driver.
+
+* Surrogates
+- =AdditiveSurrogate= / =ChebyshevSurrogate= / =ReducedObjective= can be read at the Obj slot (cheap evals) or the Move slot (independence proposal
+  + Metropolis correction on the true f).
+- This is how the rank-1 tensor independence driver and the dimension-collapse surrogate in the IISE manuscript achieve their "one fitted object serves multiple slots" property.
+
+See the anneal tutorials (bayesian-pilot-mixer, gle-colored-noise, polish-device-scale, additive independence) for concrete driver-level examples.

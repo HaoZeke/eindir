@@ -1,0 +1,56 @@
+#+TITLE: Quickstart with Python
+#+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
+
+#+begin_export rst
+==============================
+Quickstart with Python
+==============================
+
+This tutorial shows the core workflow: define or wrap an objective, generate
+low-discrepancy starts, and evaluate. All primitives are the same ones
+consumed by =anneal=.
+#+end_export
+
+* Prerequisites
+
+#+begin_src bash
+pip install "eindir[all]"
+#+end_src
+
+* Step 1: Define a Python objective (or use builtin)
+
+#+begin_src python
+import numpy as np
+from eindir import Objective, Bounds, low_discrepancy_points
+
+class Rastrigin2D(Objective):
+    def __init__(self):
+        low = np.full(2, -5.12)
+        high = np.full(2, 5.12)
+        super().__init__(Bounds(low, high, 0.0))
+
+    def eval(self, x):
+        x = np.asarray(x, dtype=np.float64)
+        return float(10.0 * len(x) + np.sum(x**2 - 10.0 * np.cos(2.0 * np.pi * x)))
+
+obj = Rastrigin2D()
+#+end_src
+
+* Step 2: Low-discrepancy initialisation
+
+#+begin_src python
+starts = low_discrepancy_points(obj.bounds.low, obj.bounds.high, 8, skip=1)
+print("8 starts:\n", starts)
+
+vals = [obj.eval(s) for s in starts]
+print("Values at starts:", vals)
+#+end_src
+
+* Step 3: Use with GLE or surrogates (see other tutorials)
+
+The same =obj= (or any class implementing the =Objective= protocol) can be passed to =anneal.gle_langevin=, surrogate fitting, QMC polish, etc.
+
+See:
+- [[file:gle-thermostat.org][GLE thermostat tutorial]]
+- [[file:surrogates.org][Surrogates tutorial]]
+- [[file:../howto/using-with-anneal.org][Using with anneal]] for the typed SA algebra.

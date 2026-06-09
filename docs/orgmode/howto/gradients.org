@@ -1,0 +1,12 @@
+#+TITLE: Gradients
+#+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
+
+Many drivers (GLE-Langevin, HMC, some surrogates) benefit from or require gradients.
+
+* Supplying a gradient
+
+- Implement =grad(self, x)= on your Objective subclass (returns ndarray).
+- Or wrap a Python callable + grad callable with the binding helpers.
+- When no gradient is available, finite differences are used (n_p+1 cost per gradient evaluation) and charged against the budget.
+
+See the GLE and HMC tutorials in anneal for end-to-end usage.

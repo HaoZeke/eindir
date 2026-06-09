@@ -1,0 +1,9 @@
+#+TITLE: Glossary
+#+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
+
+- =Objective= :: Trait (and Python/C/C++ surface) for f: R^D -> R with bounds.
+- =low_discrepancy_points= :: Bounded Halton-style QMC design.
+- =GLE= :: Generalised Langevin equation coloured-noise thermostat (Ceriotti-Bussi-Parrinello).
+- =AdditiveSurrogate= :: Rank-1 separable Chebyshev surrogate (c + sum g_j(x_j)).
+- =ReducedObjective= :: Active-subspace + surrogate wrapper for dimension collapse.
+- =optimal_sampling_drift= :: Drift matrix that flattens GLE efficiency across a frequency band.

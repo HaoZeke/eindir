@@ -1,0 +1,61 @@
+#+TITLE: Quickstart
+#+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
+
+#+begin_export rst
+==========
+Quickstart
+==========
+#+end_export
+
+This page walks through the main primitives with minimal runnable examples.
+
+* Installation
+
+** Python (pip)
+#+BEGIN_SRC bash
+pip install eindir
+#+END_SRC
+
+** Pixi (development)
+#+BEGIN_SRC bash
+pixi install
+pixi run -e python python-test
+#+END_SRC
+
+* Hello eindir (Objective + low-discrepancy)
+
+#+BEGIN_SRC python
+import numpy as np
+from eindir import low_discrepancy_points, Bounds
+
+# Define a simple bounded objective (Rastrigin in 2D)
+low = np.array([-5.12, -5.12])
+high = np.array([5.12, 5.12])
+bounds = Bounds(low, high, 0.0)  # dummy for example; real use supplies eval
+
+# Low-discrepancy starts (Halton-based, reproducible)
+starts = low_discrepancy_points(low, high, 4, skip=1)
+print("Starts shape:", starts.shape)
+print(starts)
+#+END_SRC
+
+See the tutorials for full Objective trait usage, GLE, and surrogates.
+
+* GLE thermostat (standalone)
+
+#+BEGIN_SRC python
+from eindir import GleThermostat, optimal_sampling_drift
+import numpy as np
+
+drift = optimal_sampling_drift(omega0=0.2)
+gle = GleThermostat.canonical(drift, dt=0.01, temperature=1.0, mass=1.0)
+# Use with your own BAB loop or via anneal.gle_langevin
+print("GLE thermostat ready, ns auxiliary momenta:", drift.shape[0]-1)
+#+END_SRC
+
+* Next steps
+
+- [[file:tutorials/quickstart.org][tutorials/quickstart]] for a full Python Objective example.
+- [[file:tutorials/gle-thermostat.org][GLE thermostat tutorial]].
+- [[file:tutorials/surrogates.org][Surrogates tutorial]] (additive rank-1 + Chebyshev).
+- [[file:howto/using-with-anneal.org][Using with anneal]] for the five-component algebra.

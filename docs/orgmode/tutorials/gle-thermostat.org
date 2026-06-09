@@ -1,0 +1,45 @@
+#+TITLE: GLE coloured-noise thermostat
+#+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
+
+#+begin_export rst
+===============================
+GLE coloured-noise thermostat
+===============================
+
+White-noise Langevin critically damps only one frequency. For ill-conditioned
+objectives (wide spread of Hessian eigenvalues) most modes are far from
+critical and decorrelate slowly.
+
+The GLE (Ceriotti-Bussi-Parrinello form) replaces white noise with coloured
+noise generated from auxiliary momenta whose drift matrix shapes a
+frequency-dependent friction. A well-chosen drift (optimal-sampling) makes
+efficiency nearly flat across a target band.
+#+end_export
+
+* API (from eindir)
+
+#+begin_src python
+from eindir import GleThermostat, optimal_sampling_drift, matrix_exp, ldl_sqrt
+import numpy as np
+
+drift = optimal_sampling_drift(omega0=0.2)   # covers [omega0, 100*omega0]
+gle = GleThermostat.canonical(drift, dt=0.01, temperature=1.0, mass=1.0)
+
+# Stationary sample for auxiliary state (ns+1, dim)
+ns = drift.shape[0] - 1
+c = np.eye(ns+1) * 1.0   # temperature-scaled covariance
+s = gle.sample_stationary(c, dim=2, mass=1.0)  # (ns+1, 2)
+#+end_src
+
+* Usage patterns
+
+- Standalone thermostat in custom integrators.
+- Via =anneal.gle_langevin= (full annealing driver, epoch-wise temperature, gradient-driven BAB + GLE).
+- The same drift matrix is reusable; correctness is set by the covariance C, acceleration by the drift A (a-la-carte decoupling).
+
+See the source comments in =eindir/src/gle.rs= and =anneal/src/methods/gle_langevin.rs= for the BAB propagator, matrix_exp (Taylor + scaling-squaring), and ldl_sqrt (stabilized for small dt).
+
+* Tie-in to anneal
+
+The GLE driver occupies the =Move= slot of the five-component algebra.
+One fitted drift therefore accelerates every gradient-capable driver (plain SA, HMC, Bayesian mixer, ...) with no per-driver code.

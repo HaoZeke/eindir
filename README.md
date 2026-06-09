@@ -7,8 +7,8 @@ A set of "particles" or components mainly focused on working with functions in N
 
 ## Development
 
-We use `towncrier` for managing newsworthy contributions. Also the easiest
-development environment is probably with `pixi` and `hatch`:
+We use `towncrier` for managing newsworthy contributions.
+Also the easiest development environment is probably with `pixi` and `hatch`:
 
 ``` sh
 pixi shell
@@ -24,3 +24,9 @@ pdm run mkdoc
 
 ## License
 MIT
+
+## Relation to anneal
+
+eindir supplies the Objective trait, Bounds, low-discrepancy generators (Halton, etc.), GLE thermostat matrices, and surrogate primitives (AdditiveSurrogate, Chebyshev, ReducedObjective).
+These primitives let anneal and downstream codes stay inside the typed five-component algebra and share one implementation of each slot.
+See the anneal website docs (quickstart, tutorials on GLE and pilot, architecture) for concrete call sites and usage.

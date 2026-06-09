@@ -2,9 +2,9 @@
 
 * What license is eindir under?
 
-MIT. See =LICENSE= in the repository root.
+MIT.
+See =LICENSE= in the repository root.
 
 * How do I cite eindir?
 
-See =CITATION.cff= in the repository root, or use the Zenodo DOI badge
-in the README.
+See =CITATION.cff= in the repository root, or use the Zenodo DOI badge in the README.

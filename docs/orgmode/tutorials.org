@@ -31,9 +31,8 @@ print(eindir._core.__version__)
 
 * Bounds and FPair
 
-The =FPair= and =NumLimit= primitives expose bounds and objective metadata for
-Python callers. The Rust crate also exports typed bounds, objective, gradient,
-surrogate, and GLE thermostat primitives consumed by =anneal=.
+The =FPair= and =NumLimit= primitives expose bounds and objective metadata for Python callers.
+The Rust crate also exports typed bounds, objective, gradient, surrogate, and GLE thermostat primitives consumed by =anneal=.
 
 #+BEGIN_SRC python
 import numpy as np

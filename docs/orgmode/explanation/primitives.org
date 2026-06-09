@@ -1,0 +1,18 @@
+#+TITLE: The Primitives (traits & design)
+#+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
+
+* Objective
+The central abstraction: a callable with bounds, optional gradient, and a protocol that both Rust and Python sides understand.
+Everything else (low-disc, GLE, surrogates, anneal drivers) is built to consume or produce Objectives.
+
+* Low-discrepancy
+Reproducible, well-spaced designs that avoid the clustering of random samples.
+Used for everything from mixer initialisation to surrogate pilots.
+
+* GLE
+Coloured noise via auxiliary momenta + drift matrix.
+The optimal-sampling construction (from the same primitives) gives a drift that flattens efficiency; the user only chooses the band (omega0) and timestep.
+
+* Surrogates
+Cheap stand-ins that can be promoted to first-class citizens (Obj or Move slot) because the true objective is still used for the acceptance decision or the reported answer.
+This is the unification that lets one fitted model serve evaluation, proposal, and (via tempering) cooling.

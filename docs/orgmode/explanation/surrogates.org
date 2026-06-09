@@ -1,0 +1,6 @@
+#+TITLE: Surrogate Mechanics
+#+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
+
+The additive surrogate is a rank-1 functional tensor train.
+Its tempered density factorises, enabling O(d) independence sampling.
+The Metropolis correction on the true objective removes the mean-field bias while preserving the "one fitted object, multiple slots" property.

@@ -1,51 +1,81 @@
 # Changelog
 
-## [0.4.0] - 2026
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+<!-- towncrier release notes start -->
+
+## [0.4.7](https://github.com/HaoZeke/eindir/tree/0.4.7) - 2026-06-08
 
 ### Added
 
-- `ReducedObjective<O>`: an `Obj`-transform that collapses any inner
-  objective onto a low-dimensional box through an affine encode/decode
-  (origin plus a basis spanning a retained subspace), so a sampler
-  searches the reduced coordinates while every value is the true
-  objective.
-- `ChebyshevSurrogate`: a total-degree Chebyshev model on a reduced box
-  with cheap value and an analytic gradient, fit elsewhere from pilot
-  samples. Both are `Objective` implementations, so every point of the
-  typed algebra consumes them through the same trait.
+- Pointset improvements: shifted low-discrepancy replicas, anchored design centers, and anchored low-discrepancy designs.
 
-## [0.2.0] - 2026
+### Fixed
+
+- Additive finite-weight guard, GLE import cleanups, and Array1 test-local fixes.
+
+
+## [0.4.4](https://github.com/HaoZeke/eindir/tree/0.4.4) - 2026-06-08
+
+### Added
+
+- Fitted optimal-sampling GLE drift with a benchmarked colored-noise comparison against white noise.
+
+
+## [0.4.3](https://github.com/HaoZeke/eindir/tree/0.4.3) - 2026-06-08
+
+### Added
+
+- Native GLE colored-noise thermostat with optimal sampling.
+
+
+## [0.4.2](https://github.com/HaoZeke/eindir/tree/0.4.2) - 2026-06-07
+
+### Added
+
+- Separable rank-1 surrogate (Additive) + tempered independence sampler.
+
+
+## [0.4.1](https://github.com/HaoZeke/eindir/tree/0.4.1) - 2026-06-07
+
+### Added
+
+- Bounded low-discrepancy designs (pointset API).
+
+
+## [0.4.0](https://github.com/HaoZeke/eindir/tree/0.4.0) - 2026-06-04
+
+### Added
+
+- ReducedObjective (dimension-collapse via affine encode/decode on retained subspace) and ChebyshevSurrogate (total-degree on reduced box with analytic gradient).
+Both are first-class Objective implementations.
+Also tvm_ffi tensor interop and Array API namespace helpers.
+
+
+## [0.3.0](https://github.com/HaoZeke/eindir/tree/0.3.0) - 2026-04-26
+
+### Added
+
+- Objective trait with built-in Ackley, Rastrigin, Rosenbrock, Styblinski-Tang; FPair and Bounds types with proptest law witnesses.
+- PyObjective adapter wrapping Python callables into the Objective<f64> algebra.
+
+
+## [0.2.0](https://github.com/HaoZeke/eindir/tree/0.2.0) - 2026-04-25
+
+### Added
+
+- Pixi workspace with default, python, and docs environments (replacing environment.yml and PDM).
+- Replaced legacy MyST + furo docs with orgmode export + Sphinx (shibuya theme) pipeline.
+- Scaffolded eindir-core Rust crate (lib + cdylib + staticlib) plus C/C++ bindings via cargo-c, pkg-config, meson, CMake.
 
 ### Changed
 
-- BREAKING: build system migrated from PDM (`pdm-backend`) to `maturin`
-  mixed mode. Python sources now live under `python/eindir/`; the wheel
-  ships a Rust extension as `eindir._core` alongside the existing
-  pure-Python helpers.
-- BREAKING: Python tests moved from `tests/` to `pytest/`.
+- Adopted cog for conventional commits + cargo-dist style releases; dropped legacy pre-commit and tbump.
+- BREAKING: build system migrated from PDM to maturin mixed mode.
+Python sources moved under python/eindir/; wheel ships Rust extension eindir._core.
 
-### Added
-
-- Rust crate `eindir-core` (lib + cdylib + staticlib) scaffolding for
-  the typed component algebra landing in v0.3.0.
-- C/C++ bindings via `cargo-c` (`pkg-config`, headers, hand-written
-  C++ companion).
-- Build-system glue (`meson.build`, `meson_options.txt`, `CMakeLists.txt`)
-  for downstream native consumers.
-- Pixi workspace with `default`, `python`, and (in the next minor)
-  `docs` environments.
-- Orgmode + Sphinx (shibuya theme) documentation pipeline replacing
-  the legacy MyST + furo setup.
-
-### Removed
-
-- PDM tooling: `pdm.lock`, PDM-specific sections in `pyproject.toml`.
-- `environment.yml` (replaced by `pixi.toml`).
-- `tbump.toml` (replaced by `cog bump`).
-- `towncrier.toml` and the `changelog.d/` news-fragment system
-  (replaced by `cog changelog` driven directly from Conventional Commits).
-- `.pre-commit-config.yaml` (CI handles fmt and clippy gating; revisit
-  if pre-commit becomes a hard requirement).
 
 ## [0.1.0](https://github.com/HaoZeke/eindir/tree/0.1.0) - 17-02-2024
 

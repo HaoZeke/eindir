@@ -1,0 +1,37 @@
+#+TITLE: GLE Mechanics
+#+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
+
+* What eindir Builds
+
+The generalized Langevin equation (GLE) thermostat in =eindir= is a small linear stochastic system attached to each physical momentum.
+Instead of damping momentum with one scalar friction, it augments the state with auxiliary momenta.
+The augmented vector evolves under a drift matrix =A= and a noise covariance chosen so that the stationary covariance is the desired thermal covariance.
+
+For a physical momentum =p= and auxiliary coordinates =s=, the thermostat acts on the stacked state =(p, s)=.
+The =GleThermostat= type stores the drift, timestep, temperature, and mass scaling needed by the BAB propagator used downstream in =anneal=.
+The supporting routines in =src/gle.rs= provide:
+
+- =matrix_exp= for the small dense propagator, using Taylor expansion with scaling and squaring.
+- =ldl_sqrt= for a stable square root of the stationary covariance.
+- =sample_stationary= for drawing an initial extended momentum state from the invariant Gaussian.
+- =optimal_sampling_drift= for a fitted Ceriotti-Bussi-Parrinello optimal-sampling drift over a target frequency band.
+
+* Correctness and Acceleration
+
+The important separation is between the covariance condition and the shape of the drift.
+The covariance fixes the invariant Boltzmann momentum distribution.
+The drift controls how quickly different local frequencies decorrelate.
+
+White-noise Langevin uses one friction scale, so it can only be close to critically damped near one frequency.
+The fitted GLE drift spreads friction across a band by coupling several damped oscillator pairs to the physical momentum.
+That makes the thermostat a better =Move= primitive for ill-conditioned objectives, while the Metropolis or trajectory-level accounting in =anneal= still evaluates the true objective.
+
+* Interface to anneal
+
+=anneal= consumes this machinery in its =gle_langevin= driver and in the paper's five-component algebra as a gradient-aware =Move= slot.
+The driver asks =eindir= for the drift matrix, builds the canonical thermostat, reseeds the auxiliary state from the stationary covariance, and advances the physical position with a BAB-style step.
+Objective values and accepted states remain owned by =anneal=; =eindir= supplies the reusable thermostat primitive.
+
+This division matters for the implementation.
+The same drift and covariance code can be used by the standalone GLE tutorial, by anneal's simulated-annealing driver, and by benchmark scripts that compare white-noise and colored-noise sampling.
+No driver needs a private copy of the matrix exponential, covariance square root, or fitted drift constants.

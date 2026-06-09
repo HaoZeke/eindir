@@ -1,24 +1,94 @@
 #+TITLE: eindir
 #+AUTHOR: eindir developers
 #+DATE: 2026
+#+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
 
-* About
+#+begin_export rst
+.. image:: /_static/eindir_logo.png
+   :width: 420
+   :align: center
+   :alt: eindir
+#+end_export
 
-=eindir= ships typed primitives for ND objective functions and bounded
-sampling. The Python user-facing surface is unchanged from the legacy
-package; the Rust crate =eindir-core= now backs the implementations,
-with =pyo3= bindings exposed as =eindir._core= and a C/C++ ABI for
-downstream native consumers.
+* Overview
 
-* Contents
+=eindir= ships typed primitives for ND objective functions and bounded sampling.
+It provides the =Objective= trait (and Python/C/C++ bindings), low-discrepancy point sets, bounds handling, a GLE coloured-noise thermostat with optimal-sampling drift, and surrogate infrastructure (Additive/Chebyshev/Reduced objectives).
+The Python surface is the familiar legacy API; the Rust =eindir-core= crate (with pyo3 + cbindgen) powers everything and is consumed by =anneal= for the five-component algebra.
 
-#+TOC: headlines 2
+Every primitive is designed for reuse: the same =Objective= and low-discrepancy facilities feed GLE, surrogates, QMC polish, and the anneal drivers without duplication.
+
+* Key Features
+
+- *Objective trait + bindings* :: ND f: R^D -> R with bounds, gradients (optional), and Python (pyo3 + array-api), C, C++ surfaces.
+Builtin test objectives (Rastrigin, Rosenbrock, Styblinski-Tang, Ackley).
+- *Low-discrepancy & halton* :: Bounded QMC point sets (Halton-based) for initialisation, pilots, polish, and surrogates.
+Reproducible via skip/seed.
+- *GLE thermostat* :: Coloured-noise generalised Langevin (Ceriotti-Bussi-Parrinello) with optimal-sampling drift matrix.
+BAB integrator, stationary reseed, exact small-matrix exp + LDL^T sqrt.
+Handles ill-conditioned spectra where white-noise Langevin fails.
+- *Surrogates* :: Additive (rank-1 separable Chebyshev) and total-degree Chebyshev surrogates, ReducedObjective (active subspace + surrogate).
+Used for dimension collapse, independence proposals, and cheap gradients.
+- *Python / C / C++ ABI* :: Mixed maturin layout for Python, cargo-c for C, hand-written C++ header.
+Full interop with array API, DLPack, TVM-FFI in downstream (anneal).
+- *Reuse with anneal* :: The same primitives power the typed SA algebra, Bayesian pilot/mixer, GLE-Langevin driver, QMC polish, device/ensemble backends, and surrogate independence proposals.
+
+See the [[file:architecture.org][architecture]] page for the crate layout and the [[file:explanation/primitives.org][primitives]] explanation for the trait design.
+The IISE manuscript (HaoZeke/anneal) shows how these feed the five-component algebra.
+
+#+begin_export rst
+.. toctree::
+   :maxdepth: 1
+   :caption: Getting started
+
+   quickstart
+   tutorials/quickstart
+   tutorials/low-discrepancy
+   tutorials/gle-thermostat
+   tutorials/surrogates
+#+end_export
+
+#+begin_export rst
+.. toctree::
+   :maxdepth: 1
+   :caption: How-to Guides
+
+   howto/install
+   howto/using-with-anneal
+   howto/gradients
+   howto/faq
+   faq
+#+end_export
+
+#+begin_export rst
+.. toctree::
+   :maxdepth: 1
+   :caption: Explanation
+
+   architecture
+   explanation/primitives
+   explanation/gle
+   explanation/surrogates
+#+end_export
+
+#+begin_export rst
+.. toctree::
+   :maxdepth: 1
+   :caption: Reference
+
+   spec
+   reference/glossary
+   reference/api-primitives
+   bindings
+   contributing
+   changelog
+   code_of_conduct
+#+end_export
 
 * Background
 
-=eindir= is the primitives layer of the simmAnneal stack. The companion
-package =anneal= consumes the =Objective= trait and ships the typed
-component algebra for simulated annealing.
+=eindir= is the primitives layer of the simmAnneal stack.
+The companion package =anneal= consumes the =Objective= trait and ships the typed component algebra for simulated annealing (Obj/Cool/Neigh/Move/Accept + L1-L4 laws).
 
-The IISE manuscript at HaoZeke/anneal (paper) defines the algebra; this
-crate hosts the Obj signature and its builtin instantiations.
+This crate hosts the core traits and helpers (Objective, low_disc, GLE, surrogates) plus the Python/C/C++ bindings.
+The IISE manuscript at HaoZeke/anneal defines the algebra that sits on top; the primitives here are deliberately reusable so the same low-discrepancy design, GLE drift, or surrogate can serve classical SA, HMC, polish, device backends, and surrogate proposals without reimplementation.

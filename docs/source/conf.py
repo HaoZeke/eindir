@@ -1,13 +1,17 @@
 import os
 
-project   = "eindir"
+# -- Project information -----------------------------------------------------
+project = "eindir"
 copyright = "2026--present, eindir developers"
-author    = "eindir developers"
-release   = "0.2.0"
+author = "eindir developers"
+html_logo = "../../branding/logo/eindir_logo.png"
 
+# -- General configuration ---------------------------------------------------
 extensions = [
+    "myst_parser",
     "sphinx.ext.autodoc",
     "sphinx.ext.intersphinx",
+    "sphinx_sitemap",
     "sphinxcontrib_rust",
     "sphinx_rustdoc_postprocess",
 ]
@@ -15,16 +19,74 @@ extensions = [
 templates_path = ["_templates"]
 exclude_patterns = []
 
-rust_crates       = {"eindir_core": os.path.abspath("../../")}
-rust_doc_dir      = os.path.join(os.path.dirname(os.path.abspath(__file__)), "crates")
-rust_rustdoc_fmt  = "rst"
-rust_generate_mode = "always"
-
-html_theme        = "shibuya"
-html_static_path  = ["_static"]
-html_theme_options = {"github_url": "https://github.com/HaoZeke/eindir"}
-
 intersphinx_mapping = {
     "python": ("https://docs.python.org/3", None),
-    "numpy":  ("https://numpy.org/doc/stable", None),
+    "numpy": ("https://numpy.org/doc/stable", None),
+    "anneal": ("https://anneal.rgoswami.me", None),
 }
+
+# -- sphinxcontrib-rust configuration ----------------------------------------
+rust_crates = {
+    "eindir_core": os.path.abspath("../../"),
+}
+rust_doc_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "crates")
+rust_rustdoc_fmt = "rst"
+rust_generate_mode = "always"
+
+# -- sphinx-rustdoc-postprocess configuration (modeled on rgpot) --------------
+rustdoc_postprocess_toctree_target = "api/index.rst"
+rustdoc_postprocess_toctree_rst = """
+Rust API (``eindir-core``)
+--------------------------
+
+.. toctree::
+   :maxdepth: 2
+
+   ../crates/eindir_core/lib
+"""
+
+# -- Options for HTML output -------------------------------------------------
+html_theme = "shibuya"
+html_static_path = ["_static"]
+
+html_theme_options = {
+    "github_url": "https://github.com/HaoZeke/eindir",
+    "accent_color": "teal",
+    "dark_code": True,
+    "globaltoc_expand_depth": 1,
+    "nav_links": [
+        {
+            "title": "Ecosystem",
+            "children": [
+                {
+                    "title": "anneal",
+                    "url": "https://anneal.rgoswami.me",
+                    "summary": "Typed component algebra for simulated annealing on eindir primitives",
+                },
+                {
+                    "title": "rgpycrumbs",
+                    "url": "https://rgpycrumbs.rgoswami.me",
+                    "summary": "Chemical physics utilities and visualization",
+                },
+            ],
+        },
+    ],
+}
+
+html_context = {
+    "source_type": "github",
+    "source_user": "HaoZeke",
+    "source_repo": "eindir",
+    "source_version": "main",
+    "source_docs_path": "/docs/source/",
+}
+
+html_sidebars = {
+    "**": [
+        "sidebars/localtoc.html",
+        "sidebars/repo-stats.html",
+        "sidebars/edit-this-page.html",
+    ],
+}
+
+html_baseurl = "https://eindir.rgoswami.me/"
