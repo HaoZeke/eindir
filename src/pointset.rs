@@ -1,5 +1,7 @@
 //! Low-discrepancy point sets for bounded numerical objectives.
 
+use std::sync::{Mutex, OnceLock};
+
 use ndarray::{Array1, Array2, ArrayView1};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
@@ -11,41 +13,47 @@ const SMALL_PRIMES: [u64; 32] = [
     101, 103, 107, 109, 113, 127, 131,
 ];
 
-fn is_prime(candidate: u64) -> bool {
-    if candidate < 2 {
-        return false;
-    }
-    if candidate == 2 {
-        return true;
-    }
-    if candidate % 2 == 0 {
-        return false;
-    }
-    let mut divisor = 3;
-    while divisor * divisor <= candidate {
-        if candidate % divisor == 0 {
-            return false;
-        }
-        divisor += 2;
-    }
-    true
+/// Lazily extended prime table shared across Halton calls.
+///
+/// High-dimensional Halton designs ask for one prime per axis. Recomputing
+/// the axis-th prime by trial division on every call is quadratic in the
+/// dimension and stalls at tens of thousands of axes (a 34k-variable problem
+/// needs the ~404000-range prime per axis). The table is grown once on demand
+/// and then read in O(1), so a `dim`-dimensional design costs a single sieve
+/// pass instead of `dim` independent searches.
+fn prime_cache() -> &'static Mutex<Vec<u64>> {
+    static CACHE: OnceLock<Mutex<Vec<u64>>> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(SMALL_PRIMES.to_vec()))
 }
 
 fn nth_prime(index: usize) -> u64 {
     if index < SMALL_PRIMES.len() {
         return SMALL_PRIMES[index];
     }
-    let mut count = SMALL_PRIMES.len();
-    let mut candidate = SMALL_PRIMES[SMALL_PRIMES.len() - 1] + 2;
-    loop {
-        if is_prime(candidate) {
-            if count == index {
-                return candidate;
+    let mut cache = prime_cache().lock().expect("prime cache poisoned");
+    if index >= cache.len() {
+        // Trial-divide each new candidate only against the primes already
+        // known up to its square root, using `p <= candidate / p` to stay
+        // overflow-safe. The table grows to `index + 1` primes exactly once.
+        let mut candidate = *cache.last().expect("non-empty prime table") + 2;
+        while cache.len() <= index {
+            let mut is_prime = true;
+            for &p in cache.iter() {
+                if p > candidate / p {
+                    break;
+                }
+                if candidate % p == 0 {
+                    is_prime = false;
+                    break;
+                }
             }
-            count += 1;
+            if is_prime {
+                cache.push(candidate);
+            }
+            candidate += 2;
         }
-        candidate += 2;
     }
+    cache[index]
 }
 
 /// Radical inverse of `index` in the given integer `base`.
@@ -188,4 +196,30 @@ pub fn boundary_anchored_low_discrepancy_points(
         }
     }
     out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nth_prime_matches_known_values() {
+        // Small primes table and the first few beyond it.
+        assert_eq!(nth_prime(0), 2);
+        assert_eq!(nth_prime(31), 131);
+        assert_eq!(nth_prime(32), 137);
+        // The 1000th prime (0-indexed 999) is 7919.
+        assert_eq!(nth_prime(999), 7919);
+        // The 10000th prime (0-indexed 9999) is 104729.
+        assert_eq!(nth_prime(9999), 104729);
+    }
+
+    #[test]
+    fn high_dimensional_halton_is_fast_and_bounded() {
+        // A 34k-dimensional design must build the prime table once and stay
+        // in the unit cube; the per-call trial-division version stalled here.
+        let unit = halton_unit(7, 34_134);
+        assert_eq!(unit.len(), 34_134);
+        assert!(unit.iter().all(|&u| (0.0..1.0).contains(&u)));
+    }
 }
