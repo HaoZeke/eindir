@@ -13,6 +13,7 @@ pub mod bounds;
 pub mod error;
 /// C ABI surface, gated behind the `capi` Cargo feature.
 #[cfg(feature = "capi")]
+#[allow(non_camel_case_types)]
 pub mod ffi;
 /// Position-value pairs.
 pub mod fpair;
