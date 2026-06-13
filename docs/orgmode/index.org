@@ -57,6 +57,7 @@ The IISE manuscript (HaoZeke/anneal) shows how these feed the five-component alg
    :caption: Getting started
 
    quickstart
+   tutorials
    tutorials/quickstart
    tutorials/low-discrepancy
    tutorials/gle-thermostat
@@ -99,6 +100,14 @@ The IISE manuscript (HaoZeke/anneal) shows how these feed the five-component alg
    contributing
    changelog
    code_of_conduct
+#+end_export
+
+#+begin_export rst
+.. toctree::
+   :maxdepth: 1
+   :caption: Development
+
+   dev/best_practices
 #+end_export
 
 * Background

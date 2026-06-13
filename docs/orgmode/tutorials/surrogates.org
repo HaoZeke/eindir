@@ -1,15 +1,9 @@
 #+TITLE: Surrogates (additive, Chebyshev, reduced)
 #+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
 
-#+begin_export rst
-======================================
-Surrogates (additive, Chebyshev, reduced)
-======================================
+* Surrogates (additive, Chebyshev, reduced)
 
-Surrogates give cheap values (and sometimes gradients) for pilots, dimension
-collapse, and independence proposals while the true objective is only
-evaluated for acceptance or the reported best.
-#+end_export
+Surrogates give cheap values (and sometimes gradients) for pilots, dimension collapse, and independence proposals while the true objective is only evaluated for acceptance or the reported best.
 
 * Additive (rank-1) surrogate
 
