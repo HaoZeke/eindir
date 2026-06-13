@@ -13,6 +13,6 @@ See also:
 - :doc:`API Primitives </reference/api-primitives>` for the stable Python-facing
   concept list.
 - :doc:`Primitives </explanation/primitives>` for the design-level explanation.
-- :anneal:doc:`anneal </index>` for the simulated-annealing drivers built on
-  these primitives.
+- `anneal documentation <https://anneal.rgoswami.me/>`__ for the
+  simulated-annealing drivers built on these primitives.
 #+end_export
