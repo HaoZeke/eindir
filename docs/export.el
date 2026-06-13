@@ -26,5 +26,10 @@
          :with-toc nil
          :section-numbers nil)))
 
+;; Remove generated RST files so Sphinx reads pages derived from org sources.
+(let ((rst-dir (expand-file-name "source" (file-name-directory (or load-file-name buffer-file-name)))))
+  (dolist (rst-file (directory-files-recursively rst-dir "\\.rst$"))
+    (delete-file rst-file)))
+
 ;; Run the publish
 (org-publish "sphinx-rst" t)

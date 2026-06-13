@@ -59,7 +59,7 @@ sphinx-sitemap             = ">=2.7.0, <3"
 # ~/.cargo/bin which is not on PATH for pixi-spawned shells.
 setup-rustdocgen = "test -x $CONDA_PREFIX/bin/sphinx-rustdocgen || cargo install --root $CONDA_PREFIX sphinx-rustdocgen"
 orgbld           = "emacs --batch -l docs/export.el"
-docbld           = { cmd = "sphinx-build docs/source docs/build -b html", depends-on = ["orgbld", "setup-rustdocgen"] }
+docbld           = { cmd = "python -m sphinx docs/source docs/build -b html", depends-on = ["orgbld", "setup-rustdocgen"] }
 
 [environments]
 default = { solve-group = "default" }
