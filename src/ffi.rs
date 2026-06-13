@@ -2,28 +2,21 @@
 //!
 //! `eindir_objective_t` is `#[repr(C)]` so consumers (e.g. rgpot-core) can embed
 //! it as the first member of a derived struct and cast between pointer types at
-//! zero cost -- the C "is-a" pattern.  Do NOT add non-C-ABI fields (Vec, Box,
-//! OnceLock, etc.) to this struct; use raw pointers and manage lifetimes in the
-//! corresponding constructors / destructors.
+//! zero cost -- the C "is-a" pattern. Keep non-C-ABI fields such as `Vec`,
+//! `Box`, and `OnceLock` out of this struct; use raw pointers and manage
+//! lifetimes in the corresponding constructors and destructors.
 //!
-//! ## Lifecycle (heap-allocated via eindir_objective_new)
-//! ```c
-//! eindir_objective_t *obj = eindir_objective_new(
-//!     dim, low_tensor, high_tensor, eval_fn, grad_fn, user_data, free_fn);
-//! double val = 0.0;
-//! eindir_status_t s = eindir_objective_eval(obj, x_tensor, &val);
-//! eindir_objective_free(obj);
-//! ```
+//! Heap-allocated lifecycle:
 //!
-//! ## Embedded lifecycle (consumer manages memory)
-//! ```c
-//! // First-member embedding -- no eindir_objective_new/free needed:
-//! rgpot_potential_t *pot = rgpot_potential_new_eindir(...);
-//! eindir_objective_t *obj = (eindir_objective_t*)pot;  // zero-cost cast
-//! double val = 0.0;
-//! eindir_objective_eval(obj, x, &val);                 // works
-//! rgpot_potential_free(pot);                           // caller owns memory
-//! ```
+//! - create an objective with `eindir_objective_new`;
+//! - evaluate it with `eindir_objective_eval`;
+//! - release it with `eindir_objective_free`.
+//!
+//! Embedded lifecycle:
+//!
+//! - place `eindir_objective_t` as the first member of the consumer struct;
+//! - cast the consumer pointer to `eindir_objective_t*` for evaluation;
+//! - call the consumer's own destructor rather than `eindir_objective_free`.
 
 use std::cell::RefCell;
 use std::ffi::CString;
@@ -64,9 +57,8 @@ thread_local! {
 
 pub fn set_last_error(msg: &str) {
     LAST_ERROR.with(|cell| {
-        let c = CString::new(msg).unwrap_or_else(|_| {
-            CString::new("(error message contained interior NUL)").unwrap()
-        });
+        let c = CString::new(msg)
+            .unwrap_or_else(|_| CString::new("(error message contained interior NUL)").unwrap());
         *cell.borrow_mut() = c;
     });
 }
@@ -126,11 +118,13 @@ pub type EindirFreeFn = Option<unsafe extern "C" fn(*mut c_void)>;
 
 /// Embeddable, C-ABI-compatible objective handle.
 ///
-/// `#[repr(C)]` means a consumer can embed this struct as the FIRST member
+/// `#[repr(C)]` means a consumer can embed this struct as the first member
 /// of a derived struct and cast `DerivedStruct*` to `eindir_objective_t*` at
-/// zero cost.  No Rust-specific types (Vec, Box, OnceLock) are allowed here.
+/// zero cost. Keep Rust-specific types such as `Vec`, `Box`, and `OnceLock` out
+/// of this layout.
 ///
 /// Lifecycle:
+///
 /// - Created by [`eindir_objective_new`]: `low` and `high` are heap-allocated
 ///   (len = `dim`) and freed by [`eindir_objective_free`].
 /// - Embedded: the consumer fills the fields directly and calls its own free
@@ -173,9 +167,7 @@ pub(crate) unsafe fn create_borrowed_f64_1d(
     data: *mut f64,
     len: usize,
 ) -> *mut DLManagedTensorVersioned {
-    use dlpk::sys::{
-        DLDataType, DLDataTypeCode, DLDevice, DLDeviceType, DLPackVersion, DLTensor,
-    };
+    use dlpk::sys::{DLDataType, DLDataTypeCode, DLDevice, DLDeviceType, DLPackVersion, DLTensor};
 
     struct Ctx {
         shape: [i64; 1],
@@ -257,34 +249,33 @@ pub unsafe extern "C" fn eindir_objective_new(
     user_data: *mut c_void,
     free_fn: EindirFreeFn,
 ) -> *mut eindir_objective_t {
-    let copy_bounds =
-        |tensor: *const DLManagedTensorVersioned, name: &str| -> Option<Vec<f64>> {
-            if tensor.is_null() {
-                set_last_error(&format!("eindir_objective_new: {name} is NULL"));
-                return None;
-            }
-            let t = unsafe { &(*tensor).dl_tensor };
-            if t.ndim != 1 {
-                set_last_error(&format!(
-                    "eindir_objective_new: {name} must be 1-D, got ndim={}",
-                    t.ndim
-                ));
-                return None;
-            }
-            let len = unsafe { *t.shape } as usize;
-            if len != dim {
-                set_last_error(&format!(
-                    "eindir_objective_new: {name} length {len} != dim {dim}"
-                ));
-                return None;
-            }
-            let data = t.data as *const f64;
-            if data.is_null() {
-                set_last_error(&format!("eindir_objective_new: {name} data is NULL"));
-                return None;
-            }
-            Some(unsafe { std::slice::from_raw_parts(data, len) }.to_vec())
-        };
+    let copy_bounds = |tensor: *const DLManagedTensorVersioned, name: &str| -> Option<Vec<f64>> {
+        if tensor.is_null() {
+            set_last_error(&format!("eindir_objective_new: {name} is NULL"));
+            return None;
+        }
+        let t = unsafe { &(*tensor).dl_tensor };
+        if t.ndim != 1 {
+            set_last_error(&format!(
+                "eindir_objective_new: {name} must be 1-D, got ndim={}",
+                t.ndim
+            ));
+            return None;
+        }
+        let len = unsafe { *t.shape } as usize;
+        if len != dim {
+            set_last_error(&format!(
+                "eindir_objective_new: {name} length {len} != dim {dim}"
+            ));
+            return None;
+        }
+        let data = t.data as *const f64;
+        if data.is_null() {
+            set_last_error(&format!("eindir_objective_new: {name} data is NULL"));
+            return None;
+        }
+        Some(unsafe { std::slice::from_raw_parts(data, len) }.to_vec())
+    };
 
     let low_vec = match copy_bounds(bounds_low, "bounds_low") {
         Some(v) => v,
@@ -473,7 +464,11 @@ pub unsafe extern "C" fn eindir_objective_has_grad(obj: *const eindir_objective_
     if obj.is_null() {
         return 0;
     }
-    if unsafe { (*obj).grad_fn.is_some() } { 1 } else { 0 }
+    if unsafe { (*obj).grad_fn.is_some() } {
+        1
+    } else {
+        0
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -546,8 +541,7 @@ impl Gradient<f64> for EindirObjectiveWrapper<'_> {
         let x_tensor = unsafe { create_borrowed_f64_1d(x_data.as_mut_ptr(), len) };
 
         let mut grad_data = vec![0.0f64; self.obj.dim];
-        let grad_tensor =
-            unsafe { create_borrowed_f64_1d(grad_data.as_mut_ptr(), self.obj.dim) };
+        let grad_tensor = unsafe { create_borrowed_f64_1d(grad_data.as_mut_ptr(), self.obj.dim) };
 
         let _status = unsafe { grad_fn(self.obj.user_data, x_tensor, grad_tensor) };
         unsafe {
@@ -707,7 +701,13 @@ mod tests {
 
         let obj = unsafe {
             eindir_objective_new(
-                dim, low_t, high_t, sum_eval, None, std::ptr::null_mut(), None,
+                dim,
+                low_t,
+                high_t,
+                sum_eval,
+                None,
+                std::ptr::null_mut(),
+                None,
             )
         };
         unsafe {
