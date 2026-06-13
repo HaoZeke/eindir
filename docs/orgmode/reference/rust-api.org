@@ -1,0 +1,18 @@
+#+TITLE: Rust API Reference
+#+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
+
+* Rust API Reference
+
+The =eindir-core= crate provides the Objective trait, bound handling, low-discrepancy generators, coloured-noise GLE thermostat machinery, surrogate models, reduced objectives, and the Rust surfaces behind the Python and C bindings.
+
+The API documentation below is generated from the crate source through =sphinxcontrib_rust= and =sphinx-rustdoc-postprocess=, then linked into this site under the same reference tree as the user-facing primitive summaries.
+
+#+begin_export rst
+See also:
+
+- :doc:`API Primitives </reference/api-primitives>` for the stable Python-facing
+  concept list.
+- :doc:`Primitives </explanation/primitives>` for the design-level explanation.
+- :anneal:doc:`anneal </index>` for the simulated-annealing drivers built on
+  these primitives.
+#+end_export

@@ -49,7 +49,7 @@ The IISE manuscript (HaoZeke/anneal) shows how these feed the five-component alg
 - [[file:howto/using-with-anneal.org][Using with anneal]] explains the division between primitives and search drivers.
 - [[file:howto/gradients.org][Gradients]] covers the optional derivative path used by GLE and local polish.
 - [[file:reference/api-primitives.org][API primitives]] names the stable concepts.
-- The generated Rust API starts at =api/index= and follows the =eindir-core= crate modules.
+- The generated Rust API starts at [[file:reference/rust-api.org][Rust API Reference]] and follows the =eindir-core= crate modules.
 
 #+begin_export rst
 .. toctree::
@@ -92,7 +92,7 @@ The IISE manuscript (HaoZeke/anneal) shows how these feed the five-component alg
    :caption: Reference
 
    spec
-   api/index
+   reference/rust-api
    reference/glossary
    reference/api-primitives
    bindings

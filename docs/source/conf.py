@@ -33,8 +33,8 @@ rust_doc_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "crates"
 rust_rustdoc_fmt = "rst"
 rust_generate_mode = "always"
 
-# -- sphinx-rustdoc-postprocess configuration (modeled on rgpot) --------------
-rustdoc_postprocess_toctree_target = "api/index.rst"
+# -- sphinx-rustdoc-postprocess configuration --------------------------------
+rustdoc_postprocess_toctree_target = "reference/rust-api.rst"
 rustdoc_postprocess_toctree_rst = """
 Rust API (``eindir-core``)
 --------------------------
@@ -51,6 +51,8 @@ html_static_path = ["_static"]
 
 html_theme_options = {
     "github_url": "https://github.com/HaoZeke/eindir",
+    "light_logo": "_static/eindir_logo.png",
+    "dark_logo": "_static/eindir_logo.png",
     "accent_color": "teal",
     "dark_code": True,
     "globaltoc_expand_depth": 1,
