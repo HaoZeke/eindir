@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 <!-- towncrier release notes start -->
 
+## [0.5.0](https://github.com/HaoZeke/eindir/tree/0.5.0) - 2026-06-26
+
+### Added
+
+- Expose the Objective/Gradient contract through the cargo-c C API, with
+  ``eindir_objective_t`` as a ``repr(C)`` first-member embeddable handle for
+  downstream C/C++ consumers.
+
+### Fixed
+
+- Cache the Halton prime table so high-dimensional low-discrepancy designs no
+  longer stall on repeated prime generation.
+- Correct analytic gradients for the built-in objective functions and split the
+  Python objective-handle feature so optional bindings stay coherent.
+
+### Miscellaneous
+
+- Refresh Sphinx/orgmode site docs, repair reference navigation, and stabilize
+  the documentation build pipeline.
+
+
 ## [0.4.7](https://github.com/HaoZeke/eindir/tree/0.4.7) - 2026-06-08
 
 ### Added
