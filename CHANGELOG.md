@@ -25,6 +25,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 - Refresh Sphinx/orgmode site docs, repair reference navigation, and stabilize
   the documentation build pipeline.
+- Resolve ``dlpk`` from crates.io (v0.1.5) instead of a git pin, unblocking
+  registry publication of ``eindir-core``.
 
 
 ## [0.4.7](https://github.com/HaoZeke/eindir/tree/0.4.7) - 2026-06-08

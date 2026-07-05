@@ -22,7 +22,7 @@ python = ["py-objective"]
 [dependencies]
 thiserror = "2"
 ndarray   = "0.17"
-dlpk      = { git = "https://github.com/metatensor/dlpk.git", tag = "v0.1.5", features = ["ndarray", "half"] }
+dlpk      = { version = "0.1.5", features = ["ndarray", "half"] }
 pyo3      = { version = "0.26", features = ["extension-module", "abi3-py310"], optional = true }
 numpy     = { version = "0.26", optional = true }
 num-traits  = "0.2"
