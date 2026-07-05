@@ -1,0 +1,20 @@
+#+TITLE: Code of Conduct
+#+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
+
+* Code of Conduct
+
+The =eindir= project adopts the [[https://www.contributor-covenant.org/version/2/1/code_of_conduct/][Contributor Covenant]] (v2.1).
+
+* Our Pledge
+
+Project spaces should remain open, respectful, and focused on the work.
+Participation is welcome across backgrounds, identities, experience levels, and technical domains.
+
+* Standards
+
+Helpful participation includes reproducible reports, concrete examples, constructive review, and patience with users and maintainers.
+Unacceptable conduct includes harassment, personal attacks, publication of private information, or sustained disruption of technical discussion.
+
+* Enforcement
+
+Maintainers may clarify expectations, moderate discussions, or restrict participation when conduct makes project work harder for other contributors.

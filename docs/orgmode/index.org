@@ -4,6 +4,12 @@
 #+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
 
 #+begin_export rst
+====================
+eindir Documentation
+====================
+
+.. contents::
+
 .. image:: /_static/eindir_logo.png
    :width: 420
    :align: center
@@ -17,18 +23,19 @@ It provides the =Objective= trait (and Python/C/C++ bindings), low-discrepancy p
 The Python surface is the familiar legacy API; the Rust =eindir-core= crate (with pyo3 + cbindgen) powers everything and is consumed by =anneal= for the five-component algebra.
 
 Every primitive is designed for reuse: the same =Objective= and low-discrepancy facilities feed GLE, surrogates, QMC polish, and the anneal drivers without duplication.
+Use =eindir= directly when the task is to define an objective, generate bounded point sets, expose gradients across language boundaries, or build proposal machinery that should remain independent of a particular optimiser.
 
 * Key Features
 
 - *Objective trait + bindings* :: ND f: R^D -> R with bounds, gradients (optional), and Python (pyo3 + array-api), C, C++ surfaces.
 Builtin test objectives (Rastrigin, Rosenbrock, Styblinski-Tang, Ackley).
 - *Low-discrepancy & halton* :: Bounded QMC point sets (Halton-based) for initialisation, pilots, polish, and surrogates.
-Reproducible via skip/seed.
+The same deterministic sequence can seed starts, fit surrogates, or feed an optimiser, so benchmark campaigns do not mix sampling changes with algorithm changes.
 - *GLE thermostat* :: Coloured-noise generalised Langevin (Ceriotti-Bussi-Parrinello) with optimal-sampling drift matrix.
 BAB integrator, stationary reseed, exact small-matrix exp + LDL^T sqrt.
-Handles ill-conditioned spectra where white-noise Langevin fails.
+The drift and covariance machinery provide reusable coloured-noise moves for objectives whose curvature spans separated time scales.
 - *Surrogates* :: Additive (rank-1 separable Chebyshev) and total-degree Chebyshev surrogates, ReducedObjective (active subspace + surrogate).
-Used for dimension collapse, independence proposals, and cheap gradients.
+These give downstream optimisers cheap structure without replacing the authoritative objective.
 - *Python / C / C++ ABI* :: Mixed maturin layout for Python, cargo-c for C, hand-written C++ header.
 Full interop with array API, DLPack, TVM-FFI in downstream (anneal).
 - *Reuse with anneal* :: The same primitives power the typed SA algebra, Bayesian pilot/mixer, GLE-Langevin driver, QMC polish, device/ensemble backends, and surrogate independence proposals.
@@ -36,12 +43,21 @@ Full interop with array API, DLPack, TVM-FFI in downstream (anneal).
 See the [[file:architecture.org][architecture]] page for the crate layout and the [[file:explanation/primitives.org][primitives]] explanation for the trait design.
 The IISE manuscript (HaoZeke/anneal) shows how these feed the five-component algebra.
 
+* What to Read First
+
+- [[file:quickstart.org][Quickstart]] shows the smallest objective and bounded sampling workflow.
+- [[file:howto/using-with-anneal.org][Using with anneal]] explains the division between primitives and search drivers.
+- [[file:howto/gradients.org][Gradients]] covers the optional derivative path used by GLE and local polish.
+- [[file:reference/api-primitives.org][API primitives]] names the stable concepts.
+- The generated Rust API starts at [[file:reference/rust-api.org][Rust API Reference]] and follows the =eindir-core= crate modules.
+
 #+begin_export rst
 .. toctree::
    :maxdepth: 1
    :caption: Getting started
 
    quickstart
+   tutorials
    tutorials/quickstart
    tutorials/low-discrepancy
    tutorials/gle-thermostat
@@ -77,12 +93,21 @@ The IISE manuscript (HaoZeke/anneal) shows how these feed the five-component alg
    :caption: Reference
 
    spec
+   reference/rust-api
    reference/glossary
    reference/api-primitives
    bindings
    contributing
    changelog
    code_of_conduct
+#+end_export
+
+#+begin_export rst
+.. toctree::
+   :maxdepth: 1
+   :caption: Development
+
+   dev/best_practices
 #+end_export
 
 * Background

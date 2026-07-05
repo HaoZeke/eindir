@@ -1,6 +1,8 @@
 #+TITLE: API Primitives (Python)
 #+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
 
+* API Primitives (Python)
+
 See the Python package =eindir= (re-exports from =eindir._core= plus pure-Python helpers) and the Rust docs (via sphinxcontrib_rust in this Sphinx build).
 
 Core symbols: =Objective=, =Bounds=, =low_discrepancy_points=, =halton_unit=, =GleThermostat=, =optimal_sampling_drift=, =AdditiveSurrogate=, =ChebyshevSurrogate=, =ReducedObjective=, and the various builtin objectives.

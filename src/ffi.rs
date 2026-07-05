@@ -1,23 +1,22 @@
 //! C ABI surface for eindir-core.
 //!
-//! ## Version
-//! [`eindir_core_version`] returns the package version as a NUL-terminated
-//! ASCII string.
+//! `eindir_objective_t` is `#[repr(C)]` so consumers (e.g. rgpot-core) can embed
+//! it as the first member of a derived struct and cast between pointer types at
+//! zero cost -- the C "is-a" pattern. Keep non-C-ABI fields such as `Vec`,
+//! `Box`, and `OnceLock` out of this struct; use raw pointers and manage
+//! lifetimes in the corresponding constructors and destructors.
 //!
-//! ## Objective handle
-//! A C or C++ caller can define an objective from its own value (and optional
-//! gradient) function pointers and evaluate it through eindir.  Arrays are
-//! passed as DLPack `DLManagedTensorVersioned*` tensors so the data can live
-//! on any device without eindir itself taking on a CUDA dependency.
+//! Heap-allocated lifecycle:
 //!
-//! ### Lifecycle
-//! ```c
-//! eindir_objective_t *obj = eindir_objective_new(
-//!     dim, low_tensor, high_tensor, eval_fn, grad_fn, user_data, free_fn);
-//! double val = 0.0;
-//! eindir_status_t s = eindir_objective_eval(obj, x_tensor, &val);
-//! eindir_objective_free(obj);
-//! ```
+//! - create an objective with `eindir_objective_new`;
+//! - evaluate it with `eindir_objective_eval`;
+//! - release it with `eindir_objective_free`.
+//!
+//! Embedded lifecycle:
+//!
+//! - place `eindir_objective_t` as the first member of the consumer struct;
+//! - cast the consumer pointer to `eindir_objective_t*` for evaluation;
+//! - call the consumer's own destructor rather than `eindir_objective_free`.
 
 use std::cell::RefCell;
 use std::ffi::CString;
@@ -30,9 +29,6 @@ use dlpk::sys::DLManagedTensorVersioned;
 // ---------------------------------------------------------------------------
 
 /// Returns the eindir-core package version as a NUL-terminated ASCII string.
-///
-/// The returned pointer is valid for the lifetime of the process — the string
-/// lives in the binary's read-only data segment and is never freed.
 #[unsafe(no_mangle)]
 pub extern "C" fn eindir_core_version() -> *const c_char {
     concat!(env!("CARGO_PKG_VERSION"), "\0").as_ptr() as *const c_char
@@ -46,11 +42,8 @@ pub extern "C" fn eindir_core_version() -> *const c_char {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum eindir_status_t {
-    /// Operation completed successfully.
     EINDIR_SUCCESS = 0,
-    /// An invalid parameter was passed (null pointer, wrong size, etc.).
     EINDIR_INVALID_PARAMETER = 1,
-    /// An internal error occurred (e.g. a Rust panic was caught).
     EINDIR_INTERNAL_ERROR = 2,
 }
 
@@ -62,18 +55,15 @@ thread_local! {
     static LAST_ERROR: RefCell<CString> = RefCell::new(CString::default());
 }
 
-fn set_last_error(msg: &str) {
+pub fn set_last_error(msg: &str) {
     LAST_ERROR.with(|cell| {
-        let c = CString::new(msg).unwrap_or_else(|_| {
-            CString::new("(error message contained interior NUL)").unwrap()
-        });
+        let c = CString::new(msg)
+            .unwrap_or_else(|_| CString::new("(error message contained interior NUL)").unwrap());
         *cell.borrow_mut() = c;
     });
 }
 
 /// Retrieve the last error message for the current thread.
-///
-/// The pointer is valid until the next `eindir_*` call on the same thread.
 #[unsafe(no_mangle)]
 pub extern "C" fn eindir_last_error() -> *const c_char {
     LAST_ERROR.with(|cell| cell.borrow().as_ptr())
@@ -104,26 +94,13 @@ where
 // ---------------------------------------------------------------------------
 
 /// Callback for evaluating the objective value.
-///
-/// - `user_data`: opaque pointer forwarded from `eindir_objective_new`.
-/// - `x`: a DLPack tensor of shape `[dim]`, dtype f64, on any device.
-/// - `value_out`: pointer where the callback writes the scalar result.
-///
-/// Returns `EINDIR_SUCCESS` on success, or an error status code.
 pub type EindirEvalFn = unsafe extern "C" fn(
     user_data: *mut c_void,
     x: *const DLManagedTensorVersioned,
     value_out: *mut f64,
 ) -> eindir_status_t;
 
-/// Callback for evaluating the gradient.
-///
-/// - `user_data`: opaque pointer forwarded from `eindir_objective_new`.
-/// - `x`: a DLPack tensor of shape `[dim]`, dtype f64.
-/// - `grad_out`: a DLPack tensor of shape `[dim]`, dtype f64 — the callback
-///   writes the gradient values into this tensor's data buffer.
-///
-/// Returns `EINDIR_SUCCESS` on success.
+/// Callback for evaluating the gradient (NULL = no analytic gradient).
 pub type EindirGradFn = Option<
     unsafe extern "C" fn(
         user_data: *mut c_void,
@@ -136,57 +113,61 @@ pub type EindirGradFn = Option<
 pub type EindirFreeFn = Option<unsafe extern "C" fn(*mut c_void)>;
 
 // ---------------------------------------------------------------------------
-// Opaque objective handle
+// Embeddable objective handle
 // ---------------------------------------------------------------------------
 
-/// Opaque handle representing a user-defined objective function.
+/// Embeddable, C-ABI-compatible objective handle.
 ///
-/// Created via [`eindir_objective_new`], freed via [`eindir_objective_free`].
+/// `#[repr(C)]` means a consumer can embed this struct as the first member
+/// of a derived struct and cast `DerivedStruct*` to `eindir_objective_t*` at
+/// zero cost. Keep Rust-specific types such as `Vec`, `Box`, and `OnceLock` out
+/// of this layout.
+///
+/// Lifecycle:
+///
+/// - Created by [`eindir_objective_new`]: `low` and `high` are heap-allocated
+///   (len = `dim`) and freed by [`eindir_objective_free`].
+/// - Embedded: the consumer fills the fields directly and calls its own free
+///   function; never call [`eindir_objective_free`] on an embedded base.
+#[repr(C)]
 pub struct eindir_objective_t {
-    dim: usize,
-    /// Bounds lower corner, owned.
-    low: Vec<f64>,
-    /// Bounds upper corner, owned.
-    high: Vec<f64>,
-    /// Cached `Bounds<f64>` for the `Objective` trait impl (lazily initialized).
-    bounds_cache: std::sync::OnceLock<crate::Bounds<f64>>,
-    eval_fn: EindirEvalFn,
-    grad_fn: EindirGradFn,
-    user_data: *mut c_void,
-    free_fn: EindirFreeFn,
+    /// Number of input dimensions.
+    pub dim: usize,
+    /// Lower bounds: heap-allocated f64[dim], owned by this struct when
+    /// created via eindir_objective_new.
+    pub low: *mut f64,
+    /// Upper bounds: heap-allocated f64[dim], owned by this struct when
+    /// created via eindir_objective_new.
+    pub high: *mut f64,
+    /// Value callback.  Must not be NULL.
+    pub eval_fn: EindirEvalFn,
+    /// Gradient callback.  NULL when no analytic gradient is available.
+    pub grad_fn: EindirGradFn,
+    /// Opaque context forwarded verbatim to every callback invocation.
+    pub user_data: *mut c_void,
+    /// Optional destructor for `user_data`; called by eindir_objective_free.
+    /// Set to NULL when embedding; manage cleanup in the derived struct's own
+    /// free function.
+    pub free_fn: EindirFreeFn,
 }
 
+// Safety: user_data pointer is opaque; caller guarantees thread safety.
 unsafe impl Send for eindir_objective_t {}
-// Safety: The user_data pointer is opaque and the caller guarantees thread
-// safety of the underlying object, matching the contract in rgpot/metatensor.
 unsafe impl Sync for eindir_objective_t {}
 
-impl Drop for eindir_objective_t {
-    fn drop(&mut self) {
-        if let Some(free_fn) = self.free_fn {
-            if !self.user_data.is_null() {
-                unsafe { free_fn(self.user_data) };
-            }
-        }
-    }
-}
-
 // ---------------------------------------------------------------------------
-// DLPack tensor helpers (internal, for bounds tensors)
+// DLPack tensor helpers (internal)
 // ---------------------------------------------------------------------------
 
-/// Create a read-only, non-owning 1-D f64 DLPack tensor wrapping `data`.
+/// Create a non-owning 1-D f64 DLPack tensor wrapping `data`.
 ///
 /// # Safety
-/// `data` must point to at least `len` contiguous f64 values and must
-/// remain valid for the lifetime of the returned tensor.
-unsafe fn create_borrowed_f64_1d(
+/// `data` must point to at least `len` f64 values that outlive the tensor.
+pub(crate) unsafe fn create_borrowed_f64_1d(
     data: *mut f64,
     len: usize,
 ) -> *mut DLManagedTensorVersioned {
-    use dlpk::sys::{
-        DLDataType, DLDataTypeCode, DLDevice, DLDeviceType, DLPackVersion, DLTensor,
-    };
+    use dlpk::sys::{DLDataType, DLDataTypeCode, DLDevice, DLDeviceType, DLPackVersion, DLTensor};
 
     struct Ctx {
         shape: [i64; 1],
@@ -237,8 +218,8 @@ unsafe fn create_borrowed_f64_1d(
     Box::into_raw(managed)
 }
 
-/// Free a DLPack tensor by invoking its deleter.
-unsafe fn tensor_free(tensor: *mut DLManagedTensorVersioned) {
+/// Free a DLPack tensor by calling its deleter.
+pub(crate) unsafe fn tensor_free(tensor: *mut DLManagedTensorVersioned) {
     if tensor.is_null() {
         return;
     }
@@ -251,19 +232,13 @@ unsafe fn tensor_free(tensor: *mut DLManagedTensorVersioned) {
 // Constructor / destructor
 // ---------------------------------------------------------------------------
 
-/// Create a new objective handle from C callbacks.
+/// Create a new heap-allocated objective handle from C callbacks.
 ///
-/// - `dim`: number of input dimensions.
-/// - `bounds_low`: DLPack tensor of shape `[dim]`, dtype f64 — lower bounds.
-///   The data is **copied**; the caller may free the tensor after this call.
-/// - `bounds_high`: DLPack tensor of shape `[dim]`, dtype f64 — upper bounds.
-///   The data is **copied**.
-/// - `eval_fn`: callback that computes the objective value (required).
-/// - `grad_fn`: callback that computes the gradient (may be `NULL`).
-/// - `user_data`: opaque pointer forwarded to the callbacks.
-/// - `free_fn`: optional destructor for `user_data` (may be `NULL`).
+/// Bounds data is copied from the DLPack tensors; the caller may free them
+/// after this call returns.  Returns NULL on failure.
 ///
-/// Returns a heap-allocated `eindir_objective_t*`, or `NULL` on failure.
+/// The caller must eventually pass the returned pointer to
+/// [`eindir_objective_free`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn eindir_objective_new(
     dim: usize,
@@ -274,7 +249,6 @@ pub unsafe extern "C" fn eindir_objective_new(
     user_data: *mut c_void,
     free_fn: EindirFreeFn,
 ) -> *mut eindir_objective_t {
-    // Validate and copy bounds
     let copy_bounds = |tensor: *const DLManagedTensorVersioned, name: &str| -> Option<Vec<f64>> {
         if tensor.is_null() {
             set_last_error(&format!("eindir_objective_new: {name} is NULL"));
@@ -303,36 +277,64 @@ pub unsafe extern "C" fn eindir_objective_new(
         Some(unsafe { std::slice::from_raw_parts(data, len) }.to_vec())
     };
 
-    let low = match copy_bounds(bounds_low, "bounds_low") {
+    let low_vec = match copy_bounds(bounds_low, "bounds_low") {
         Some(v) => v,
         None => return std::ptr::null_mut(),
     };
-    let high = match copy_bounds(bounds_high, "bounds_high") {
+    let high_vec = match copy_bounds(bounds_high, "bounds_high") {
         Some(v) => v,
         None => return std::ptr::null_mut(),
     };
 
-    let obj = eindir_objective_t {
+    // Leak the Vecs into raw pointers -- eindir_objective_free reclaims them.
+    let low = {
+        let mut v = low_vec;
+        let ptr = v.as_mut_ptr();
+        std::mem::forget(v);
+        ptr
+    };
+    let high = {
+        let mut v = high_vec;
+        let ptr = v.as_mut_ptr();
+        std::mem::forget(v);
+        ptr
+    };
+
+    Box::into_raw(Box::new(eindir_objective_t {
         dim,
         low,
         high,
-        bounds_cache: std::sync::OnceLock::new(),
         eval_fn,
         grad_fn,
         user_data,
         free_fn,
-    };
-    Box::into_raw(Box::new(obj))
+    }))
 }
 
-/// Free an objective handle.
+/// Free an objective handle created by [`eindir_objective_new`].
 ///
-/// If `obj` is `NULL`, this is a no-op.
+/// Calls `free_fn(user_data)` if a destructor was registered, frees the bounds
+/// arrays, then frees the struct.  Do NOT call this on embedded objectives;
+/// call the owning struct's free function (e.g. `rgpot_potential_free`) instead.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn eindir_objective_free(obj: *mut eindir_objective_t) {
-    if !obj.is_null() {
-        drop(unsafe { Box::from_raw(obj) });
+    if obj.is_null() {
+        return;
     }
+    let o = unsafe { &*obj };
+    if let Some(ff) = o.free_fn {
+        if !o.user_data.is_null() {
+            unsafe { ff(o.user_data) };
+        }
+    }
+    // Reclaim the bounds arrays allocated in eindir_objective_new.
+    if !o.low.is_null() {
+        unsafe { drop(Vec::from_raw_parts(o.low, o.dim, o.dim)) };
+    }
+    if !o.high.is_null() {
+        unsafe { drop(Vec::from_raw_parts(o.high, o.dim, o.dim)) };
+    }
+    unsafe { drop(Box::from_raw(obj)) };
 }
 
 // ---------------------------------------------------------------------------
@@ -341,19 +343,14 @@ pub unsafe extern "C" fn eindir_objective_free(obj: *mut eindir_objective_t) {
 
 /// Returns the number of input dimensions.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn eindir_objective_dim(
-    obj: *const eindir_objective_t,
-) -> usize {
+pub unsafe extern "C" fn eindir_objective_dim(obj: *const eindir_objective_t) -> usize {
     if obj.is_null() {
         return 0;
     }
     unsafe { (*obj).dim }
 }
 
-/// Writes the lower-bound vector into `out`, a DLPack tensor of shape `[dim]`.
-///
-/// The caller must supply a pre-allocated tensor whose data buffer has room
-/// for `dim` f64 values.
+/// Writes the lower-bound vector into `out` (pre-allocated DLPack tensor, shape [dim]).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn eindir_objective_bounds_low(
     obj: *const eindir_objective_t,
@@ -371,14 +368,12 @@ pub unsafe extern "C" fn eindir_objective_bounds_low(
             set_last_error("eindir_objective_bounds_low: tensor data is NULL");
             return eindir_status_t::EINDIR_INVALID_PARAMETER;
         }
-        unsafe {
-            std::ptr::copy_nonoverlapping(o.low.as_ptr(), dst, o.dim);
-        }
+        unsafe { std::ptr::copy_nonoverlapping(o.low, dst, o.dim) };
         eindir_status_t::EINDIR_SUCCESS
     }))
 }
 
-/// Writes the upper-bound vector into `out`, a DLPack tensor of shape `[dim]`.
+/// Writes the upper-bound vector into `out` (pre-allocated DLPack tensor, shape [dim]).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn eindir_objective_bounds_high(
     obj: *const eindir_objective_t,
@@ -396,9 +391,7 @@ pub unsafe extern "C" fn eindir_objective_bounds_high(
             set_last_error("eindir_objective_bounds_high: tensor data is NULL");
             return eindir_status_t::EINDIR_INVALID_PARAMETER;
         }
-        unsafe {
-            std::ptr::copy_nonoverlapping(o.high.as_ptr(), dst, o.dim);
-        }
+        unsafe { std::ptr::copy_nonoverlapping(o.high, dst, o.dim) };
         eindir_status_t::EINDIR_SUCCESS
     }))
 }
@@ -408,12 +401,6 @@ pub unsafe extern "C" fn eindir_objective_bounds_high(
 // ---------------------------------------------------------------------------
 
 /// Evaluate the objective at point `x`.
-///
-/// - `obj`: a valid objective handle.
-/// - `x`: DLPack tensor of shape `[dim]`, dtype f64.
-/// - `value_out`: pointer where the result is written.
-///
-/// Returns `EINDIR_SUCCESS` on success.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn eindir_objective_eval(
     obj: *const eindir_objective_t,
@@ -440,12 +427,7 @@ pub unsafe extern "C" fn eindir_objective_eval(
 
 /// Compute the gradient at point `x`.
 ///
-/// - `obj`: a valid objective handle that was created with a non-NULL `grad_fn`.
-/// - `x`: DLPack tensor of shape `[dim]`, dtype f64.
-/// - `grad_out`: DLPack tensor of shape `[dim]`, dtype f64 — the gradient is
-///   written into this tensor's data buffer.
-///
-/// Returns `EINDIR_INVALID_PARAMETER` if the objective has no gradient callback.
+/// Returns `EINDIR_INVALID_PARAMETER` when no gradient callback was registered.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn eindir_objective_grad(
     obj: *const eindir_objective_t,
@@ -476,11 +458,9 @@ pub unsafe extern "C" fn eindir_objective_grad(
     }))
 }
 
-/// Returns `true` (non-zero) if the objective has a gradient callback.
+/// Returns non-zero if the objective has a gradient callback.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn eindir_objective_has_grad(
-    obj: *const eindir_objective_t,
-) -> i32 {
+pub unsafe extern "C" fn eindir_objective_has_grad(obj: *const eindir_objective_t) -> i32 {
     if obj.is_null() {
         return 0;
     }
@@ -492,37 +472,54 @@ pub unsafe extern "C" fn eindir_objective_has_grad(
 }
 
 // ---------------------------------------------------------------------------
-// Rust-side trait implementation: allows consuming an eindir_objective_t
-// as an Objective<f64> (and optionally Gradient<f64>) from Rust code.
-// This is the bridge that lets rgpot-core potentials be used as eindir
-// objectives on the Rust side too.
+// Rust-side wrapper for trait use
+//
+// eindir_objective_t is #[repr(C)] and must not store Rust-specific types
+// (Bounds, OnceLock, etc.).  EindirObjectiveWrapper borrows an
+// eindir_objective_t and provides the Objective<f64> / Gradient<f64> surfaces.
 // ---------------------------------------------------------------------------
 
 use crate::{Bounds, Objective};
 use ndarray::{Array1, ArrayView1};
 
-impl Objective<f64> for eindir_objective_t {
+/// Rust-side view over a C objective, implementing Objective/Gradient.
+pub struct EindirObjectiveWrapper<'a> {
+    obj: &'a eindir_objective_t,
+    bounds: Bounds<f64>,
+}
+
+impl<'a> EindirObjectiveWrapper<'a> {
+    /// # Safety
+    /// `obj.low` and `obj.high` must point to `obj.dim` valid f64 values.
+    pub unsafe fn new(obj: &'a eindir_objective_t) -> Self {
+        let low = unsafe { std::slice::from_raw_parts(obj.low, obj.dim) };
+        let high = unsafe { std::slice::from_raw_parts(obj.high, obj.dim) };
+        EindirObjectiveWrapper {
+            obj,
+            bounds: Bounds::new(
+                Array1::from_vec(low.to_vec()),
+                Array1::from_vec(high.to_vec()),
+                0.0,
+            ),
+        }
+    }
+}
+
+impl Objective<f64> for EindirObjectiveWrapper<'_> {
     fn dim(&self) -> usize {
-        self.dim
+        self.obj.dim
     }
 
     fn bounds(&self) -> &Bounds<f64> {
-        self.bounds_cache.get_or_init(|| {
-            Bounds::new(
-                Array1::from_vec(self.low.clone()),
-                Array1::from_vec(self.high.clone()),
-                0.0,
-            )
-        })
+        &self.bounds
     }
 
     fn eval(&self, x: ArrayView1<f64>) -> f64 {
-        // Create a temporary borrowed DLPack tensor wrapping the ndarray data.
         let mut data = x.to_owned();
         let len = data.len();
         let tensor = unsafe { create_borrowed_f64_1d(data.as_mut_ptr(), len) };
         let mut value: f64 = f64::NAN;
-        let status = unsafe { (self.eval_fn)(self.user_data, tensor, &mut value) };
+        let status = unsafe { (self.obj.eval_fn)(self.obj.user_data, tensor, &mut value) };
         unsafe { tensor_free(tensor) };
         if status != eindir_status_t::EINDIR_SUCCESS {
             return f64::NAN;
@@ -533,20 +530,20 @@ impl Objective<f64> for eindir_objective_t {
 
 use crate::gradient::Gradient;
 
-impl Gradient<f64> for eindir_objective_t {
+impl Gradient<f64> for EindirObjectiveWrapper<'_> {
     fn grad(&self, x: ArrayView1<f64>) -> Array1<f64> {
-        let grad_fn = match self.grad_fn {
+        let grad_fn = match self.obj.grad_fn {
             Some(gf) => gf,
-            None => return Array1::zeros(self.dim),
+            None => return Array1::zeros(self.obj.dim),
         };
         let mut x_data = x.to_owned();
         let len = x_data.len();
         let x_tensor = unsafe { create_borrowed_f64_1d(x_data.as_mut_ptr(), len) };
 
-        let mut grad_data = vec![0.0f64; self.dim];
-        let grad_tensor = unsafe { create_borrowed_f64_1d(grad_data.as_mut_ptr(), self.dim) };
+        let mut grad_data = vec![0.0f64; self.obj.dim];
+        let grad_tensor = unsafe { create_borrowed_f64_1d(grad_data.as_mut_ptr(), self.obj.dim) };
 
-        let _status = unsafe { grad_fn(self.user_data, x_tensor, grad_tensor) };
+        let _status = unsafe { grad_fn(self.obj.user_data, x_tensor, grad_tensor) };
         unsafe {
             tensor_free(x_tensor);
             tensor_free(grad_tensor);
@@ -555,7 +552,7 @@ impl Gradient<f64> for eindir_objective_t {
     }
 
     fn dim(&self) -> usize {
-        self.dim
+        self.obj.dim
     }
 }
 
@@ -574,7 +571,6 @@ mod tests {
         assert!(!s.to_str().unwrap().is_empty());
     }
 
-    // A trivial eval callback: f(x) = sum(x)
     unsafe extern "C" fn sum_eval(
         _ud: *mut c_void,
         x: *const DLManagedTensorVersioned,
@@ -587,7 +583,6 @@ mod tests {
         eindir_status_t::EINDIR_SUCCESS
     }
 
-    // A trivial grad callback: grad(x) = [1, 1, ..., 1]
     unsafe extern "C" fn ones_grad(
         _ud: *mut c_void,
         _x: *const DLManagedTensorVersioned,
@@ -689,12 +684,10 @@ mod tests {
     fn test_null_arguments() {
         assert_eq!(unsafe { eindir_objective_dim(std::ptr::null()) }, 0);
         assert_eq!(unsafe { eindir_objective_has_grad(std::ptr::null()) }, 0);
-        unsafe { eindir_objective_free(std::ptr::null_mut()) }; // no-op
+        unsafe { eindir_objective_free(std::ptr::null_mut()) };
 
         let mut v = 0.0;
-        let s = unsafe {
-            eindir_objective_eval(std::ptr::null(), std::ptr::null(), &mut v)
-        };
+        let s = unsafe { eindir_objective_eval(std::ptr::null(), std::ptr::null(), &mut v) };
         assert_eq!(s, eindir_status_t::EINDIR_INVALID_PARAMETER);
     }
 
@@ -712,7 +705,7 @@ mod tests {
                 low_t,
                 high_t,
                 sum_eval,
-                None, // no grad
+                None,
                 std::ptr::null_mut(),
                 None,
             )
@@ -724,7 +717,6 @@ mod tests {
 
         assert_eq!(unsafe { eindir_objective_has_grad(obj) }, 0);
 
-        // Trying to compute grad should return INVALID_PARAMETER
         let mut x_data = [0.5, 0.5];
         let x_t = unsafe { create_borrowed_f64_1d(x_data.as_mut_ptr(), 2) };
         let mut g_data = [0.0f64; 2];
@@ -741,10 +733,9 @@ mod tests {
     #[test]
     fn test_rust_trait_eval() {
         let obj = make_test_objective(3);
-        let o = unsafe { &*obj };
-        // Use Objective::eval from Rust
+        let wrapper = unsafe { EindirObjectiveWrapper::new(&*obj) };
         let x = ndarray::array![1.0, 2.0, 3.0];
-        let val = o.eval(x.view());
+        let val = wrapper.eval(x.view());
         assert_eq!(val, 6.0);
         unsafe { eindir_objective_free(obj) };
     }
@@ -752,10 +743,21 @@ mod tests {
     #[test]
     fn test_rust_trait_grad() {
         let obj = make_test_objective(3);
-        let o = unsafe { &*obj };
+        let wrapper = unsafe { EindirObjectiveWrapper::new(&*obj) };
         let x = ndarray::array![1.0, 2.0, 3.0];
-        let g = o.grad(x.view());
+        let g = wrapper.grad(x.view());
         assert_eq!(g, ndarray::array![1.0, 1.0, 1.0]);
         unsafe { eindir_objective_free(obj) };
+    }
+
+    /// Verify ABI layout: first field at offset 0 (required for embedding).
+    #[test]
+    fn eindir_objective_t_is_repr_c() {
+        use std::mem::offset_of;
+        assert_eq!(offset_of!(eindir_objective_t, dim), 0);
+        assert_eq!(
+            offset_of!(eindir_objective_t, low),
+            std::mem::size_of::<usize>()
+        );
     }
 }

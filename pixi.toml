@@ -1,6 +1,6 @@
 [workspace]
 name      = "eindir"
-version   = "0.4.7"
+version   = "0.5.0"
 description = "Typed primitives for ND objective functions and bounded sampling."
 channels  = ["conda-forge"]
 platforms = ["linux-64", "osx-arm64", "osx-64"]
@@ -59,7 +59,7 @@ sphinx-sitemap             = ">=2.7.0, <3"
 # ~/.cargo/bin which is not on PATH for pixi-spawned shells.
 setup-rustdocgen = "test -x $CONDA_PREFIX/bin/sphinx-rustdocgen || cargo install --root $CONDA_PREFIX sphinx-rustdocgen"
 orgbld           = "emacs --batch -l docs/export.el"
-docbld           = { cmd = "sphinx-build docs/source docs/build -b html", depends-on = ["orgbld", "setup-rustdocgen"] }
+docbld           = { cmd = "python -m sphinx docs/source docs/build -b html", depends-on = ["orgbld", "setup-rustdocgen"] }
 
 [environments]
 default = { solve-group = "default" }

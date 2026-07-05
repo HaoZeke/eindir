@@ -53,3 +53,9 @@ pub use pointset::{
     radical_inverse, shifted_halton_points, shifted_low_discrepancy_points,
 };
 pub use reduced::{ChebyshevSurrogate, ReducedObjective};
+
+#[cfg(feature = "capi")]
+pub use ffi::{
+    eindir_objective_t, EindirEvalFn, EindirGradFn, EindirFreeFn,
+    EindirObjectiveWrapper,
+};

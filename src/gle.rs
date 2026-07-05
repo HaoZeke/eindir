@@ -10,9 +10,9 @@
 //! a target frequency band -- "optimal sampling" -- so conditioning is handled
 //! by the noise spectrum exactly as the `1/sqrt(D)` scale handles dimension.
 //!
-//! The per-step propagator follows i-PI's `ThermoGLE`:
-//!   `T = exp(-dt A)`,  `S S^T = k_B (C - T C T^T)`,  `s <- T s + S xi`,
-//! with `xi` standard normal and `s[0]` the physical (mass-scaled) momentum.
+//! The per-step propagator follows i-PI's `ThermoGLE`: `T = exp(-dt A)`,
+//! `S S^T = k_B (C - T C T^T)`, and `s <- T s + S xi`, with `xi` standard
+//! normal and `s[0]` the physical (mass-scaled) momentum.
 //! For canonical sampling `C = temperature * I`, which makes the auxiliary
 //! process leave the Boltzmann momentum distribution invariant for ANY valid
 //! drift `A` -- the "a la carte" decoupling of correctness (set by `C`) from
