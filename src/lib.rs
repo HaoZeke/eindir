@@ -9,6 +9,8 @@
 pub mod additive;
 /// Box bounds on N-dimensional points.
 pub mod bounds;
+/// Box geometry features and compensated ΔE.
+pub mod features;
 /// Error types shared by all fallible operations in `eindir-core`.
 pub mod error;
 /// C ABI surface, gated behind the `capi` Cargo feature.
@@ -42,6 +44,7 @@ pub mod types;
 
 pub use additive::AdditiveSurrogate;
 pub use bounds::Bounds;
+pub use features::{box_geometry, compensated_delta, isotropic_proposal_scale, BoxGeometry};
 pub use error::Error;
 pub use fpair::FPair;
 pub use gle::{ldl_sqrt, matrix_exp, optimal_sampling_drift, GleThermostat, OPTIMAL_SAMPLING_NS};
