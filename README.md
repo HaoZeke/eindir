@@ -29,4 +29,7 @@ MIT
 
 eindir supplies the Objective trait, Bounds, low-discrepancy generators (Halton, etc.), GLE thermostat matrices, and surrogate primitives (AdditiveSurrogate, Chebyshev, ReducedObjective).
 These primitives let anneal and downstream codes stay inside the typed five-component algebra and share one implementation of each slot.
-See the anneal website docs (quickstart, tutorials on GLE and pilot, architecture) for concrete call sites and usage.
+
+**User entry for optimization:** start with [anneal](https://github.com/HaoZeke/anneal) (`pip install anneal`), the budget-only `global_optimize` API, the notebook `examples/notebooks/01_quickstart.ipynb`, and https://anneal.rgoswami.me — not the eindir trait surface.
+
+Project history: continuous development since **2023-02**. Paper reproducibility: [anneal_repro](https://github.com/HaoZeke/anneal_repro), Zenodo [10.5281/zenodo.20672621](https://doi.org/10.5281/zenodo.20672621).
