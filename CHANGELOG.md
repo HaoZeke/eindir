@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 <!-- towncrier release notes start -->
 
+## [0.5.1](https://github.com/HaoZeke/eindir/tree/0.5.1) - 2026-07-10
+
+No significant changes.
+
+
 ## [0.5.0](https://github.com/HaoZeke/eindir/tree/0.5.0) - 2026-06-26
 
 ### Added
