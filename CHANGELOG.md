@@ -8,7 +8,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 ## [0.5.1](https://github.com/HaoZeke/eindir/tree/0.5.1) - 2026-07-10
 
-No significant changes.
+### Added
+
+- `features` module: `box_geometry` / `BoxGeometry` (dimension, mean width, aspect ratio), `isotropic_proposal_scale`, and `compensated_delta` for numerically safer acceptance-path energy differences.
 
 
 ## [0.5.0](https://github.com/HaoZeke/eindir/tree/0.5.0) - 2026-06-26
