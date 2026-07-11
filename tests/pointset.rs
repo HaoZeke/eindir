@@ -1,6 +1,6 @@
 use eindir_core::{
-    boundary_anchored_low_discrepancy_points, low_discrepancy_points, radical_inverse,
-    shifted_low_discrepancy_points, Bounds,
+    Bounds, boundary_anchored_low_discrepancy_points, low_discrepancy_points, radical_inverse,
+    shifted_low_discrepancy_points,
 };
 use ndarray::Array1;
 

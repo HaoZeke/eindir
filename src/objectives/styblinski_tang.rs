@@ -1,6 +1,6 @@
 //! Styblinski-Tang 2D: a non-convex benchmark with a single global minimum.
 
-use crate::{gradient::Gradient, Bounds, FPair, Objective};
+use crate::{Bounds, FPair, Objective, gradient::Gradient};
 use ndarray::{Array1, ArrayView1};
 use std::sync::OnceLock;
 

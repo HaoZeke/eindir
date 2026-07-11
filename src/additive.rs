@@ -19,7 +19,7 @@
 //! at native CUTEst sizes. A Metropolis accept against the true objective
 //! debiases the mean-field error when the objective is not separable.
 
-use crate::{gradient::Gradient, Bounds, Objective};
+use crate::{Bounds, Objective, gradient::Gradient};
 use ndarray::{Array1, Array2, ArrayView1, ArrayView2};
 use rand::Rng;
 
@@ -179,11 +179,7 @@ impl AdditiveSurrogate {
         for j in 0..dim {
             let span = {
                 let w = high[j] - low[j];
-                if w > 0.0 {
-                    w
-                } else {
-                    1.0
-                }
+                if w > 0.0 { w } else { 1.0 }
             };
             let mut d = Array2::<f64>::zeros((n, degree));
             for i in 0..n {
@@ -378,8 +374,8 @@ impl Gradient<f64> for AdditiveSurrogate {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::rngs::StdRng;
     use rand::SeedableRng;
+    use rand::rngs::StdRng;
 
     fn box_bounds(dim: usize, lo: f64, hi: f64) -> Bounds<f64> {
         Bounds::new(Array1::from_elem(dim, lo), Array1::from_elem(dim, hi), 0.0)

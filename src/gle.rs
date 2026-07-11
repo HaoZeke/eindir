@@ -214,16 +214,18 @@ pub fn optimal_sampling_drift(omega0: f64) -> Array2<f64> {
 mod tests {
     use super::*;
     use ndarray::Array1;
-    use rand::rngs::StdRng;
     use rand::SeedableRng;
+    use rand::rngs::StdRng;
 
     #[test]
     fn matrix_exp_diagonal_and_zero() {
         let z = Array2::<f64>::zeros((3, 3));
         let e0 = matrix_exp(&z, 20, 10);
-        assert!((&e0 - &Array2::<f64>::eye(3))
-            .iter()
-            .all(|v| v.abs() < 1e-12));
+        assert!(
+            (&e0 - &Array2::<f64>::eye(3))
+                .iter()
+                .all(|v| v.abs() < 1e-12)
+        );
         let d = Array2::from_diag(&Array1::from_vec(vec![0.5, -1.0, 2.0]));
         let ed = matrix_exp(&d, 20, 10);
         for (i, val) in [0.5f64.exp(), (-1.0f64).exp(), 2.0f64.exp()]

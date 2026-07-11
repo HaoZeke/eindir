@@ -1,6 +1,6 @@
 //! N-dimensional Rosenbrock: classic banana-shaped valley benchmark.
 
-use crate::{gradient::Gradient, Bounds, FPair, Objective};
+use crate::{Bounds, FPair, Objective, gradient::Gradient};
 use ndarray::{Array1, ArrayView1};
 use std::sync::OnceLock;
 

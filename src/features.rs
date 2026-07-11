@@ -76,11 +76,7 @@ pub fn compensated_delta(f_new: f64, f_cur: f64) -> f64 {
     let bb = s - a;
     let err = (a - (s - bb)) + (b - bb);
     let out = s + err;
-    if out.is_finite() {
-        out
-    } else {
-        f_new - f_cur
-    }
+    if out.is_finite() { out } else { f_new - f_cur }
 }
 
 /// Dimension-aware isotropic proposal scale: `c * mean_width / sqrt(dim)`.
@@ -97,7 +93,7 @@ pub fn isotropic_proposal_scale(geom: &BoxGeometry, c: f64) -> f64 {
 mod tests {
     use super::*;
     use crate::bounds::Bounds;
-    use ndarray::{array, Array1};
+    use ndarray::{Array1, array};
 
     #[test]
     fn aspect_ratio_detects_elongation() {

@@ -4,7 +4,7 @@
 use pyo3::prelude::*;
 
 use crate::py_objective::{
-    low_discrepancy_points, shifted_low_discrepancy_points, PyBounds, PyFPair, PyObjective,
+    PyBounds, PyFPair, PyObjective, low_discrepancy_points, shifted_low_discrepancy_points,
 };
 
 /// pyo3 module initialiser. Exposed to Python as `eindir._core`.

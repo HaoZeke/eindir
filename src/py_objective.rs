@@ -6,7 +6,7 @@
 //! reconstruct ndarray 0.17 `Array1<f64>` / `ArrayView1<f64>` on the Rust
 //! side via `Array1::from_vec` / `ArrayView1::from`.
 
-use crate::{gradient::Gradient, Bounds, FPair, Objective};
+use crate::{Bounds, FPair, Objective, gradient::Gradient};
 use ndarray::{Array1, ArrayView1};
 use numpy::{PyArray1, PyArrayMethods, PyReadonlyArray1};
 use pyo3::exceptions::PyValueError;

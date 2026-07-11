@@ -11,7 +11,7 @@
 //! (`ChebyshevSurrogate`). Because both are objectives, the same collapse and
 //! surrogate serve every point of the algebra at once.
 
-use crate::{gradient::Gradient, Bounds, Objective};
+use crate::{Bounds, Objective, gradient::Gradient};
 use ndarray::{Array1, Array2, ArrayView1};
 
 /// Affine dimension-collapse of an inner objective onto a `k`-dimensional box.
@@ -247,7 +247,7 @@ impl<O: Objective<f64> + Gradient<f64>> Gradient<f64> for ReducedObjective<O> {
 mod tests {
     use super::*;
     use crate::objectives::StybTang2D;
-    use ndarray::{array, Array1, Array2};
+    use ndarray::{Array1, Array2, array};
 
     fn reduced_box(k: usize, lo: f64, hi: f64) -> Bounds<f64> {
         Bounds::new(Array1::from_elem(k, lo), Array1::from_elem(k, hi), 1e-9)

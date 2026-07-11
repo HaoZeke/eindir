@@ -9,10 +9,10 @@
 pub mod additive;
 /// Box bounds on N-dimensional points.
 pub mod bounds;
-/// Box geometry features and compensated ΔE.
-pub mod features;
 /// Error types shared by all fallible operations in `eindir-core`.
 pub mod error;
+/// Box geometry features and compensated ΔE.
+pub mod features;
 /// C ABI surface, gated behind the `capi` Cargo feature.
 #[cfg(feature = "capi")]
 #[allow(non_camel_case_types)]
@@ -44,10 +44,10 @@ pub mod types;
 
 pub use additive::AdditiveSurrogate;
 pub use bounds::Bounds;
-pub use features::{box_geometry, compensated_delta, isotropic_proposal_scale, BoxGeometry};
 pub use error::Error;
+pub use features::{BoxGeometry, box_geometry, compensated_delta, isotropic_proposal_scale};
 pub use fpair::FPair;
-pub use gle::{ldl_sqrt, matrix_exp, optimal_sampling_drift, GleThermostat, OPTIMAL_SAMPLING_NS};
+pub use gle::{GleThermostat, OPTIMAL_SAMPLING_NS, ldl_sqrt, matrix_exp, optimal_sampling_drift};
 pub use gradient::{AnalyticGradient, DifferentiableObjective, FiniteDiffGradient, Gradient};
 pub use objective::Objective;
 pub use objectives::{Ackley, Rastrigin, Rosenbrock, StybTang2D};
@@ -59,6 +59,5 @@ pub use reduced::{ChebyshevSurrogate, ReducedObjective};
 
 #[cfg(feature = "capi")]
 pub use ffi::{
-    eindir_objective_t, EindirEvalFn, EindirGradFn, EindirFreeFn,
-    EindirObjectiveWrapper,
+    EindirEvalFn, EindirFreeFn, EindirGradFn, EindirObjectiveWrapper, eindir_objective_t,
 };
