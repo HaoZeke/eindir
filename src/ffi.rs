@@ -42,8 +42,11 @@ pub extern "C" fn eindir_core_version() -> *const c_char {
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum eindir_status_t {
+    /// The operation completed successfully.
     EINDIR_SUCCESS = 0,
+    /// A pointer, shape, callback, or scalar argument is invalid.
     EINDIR_INVALID_PARAMETER = 1,
+    /// The operation failed internally or panicked behind the C boundary.
     EINDIR_INTERNAL_ERROR = 2,
 }
 
@@ -55,6 +58,7 @@ thread_local! {
     static LAST_ERROR: RefCell<CString> = RefCell::new(CString::default());
 }
 
+/// Replace the current thread's diagnostic returned by [`eindir_last_error`].
 pub fn set_last_error(msg: &str) {
     LAST_ERROR.with(|cell| {
         let c = CString::new(msg)
@@ -239,6 +243,12 @@ pub(crate) unsafe fn tensor_free(tensor: *mut DLManagedTensorVersioned) {
 ///
 /// The caller must eventually pass the returned pointer to
 /// [`eindir_objective_free`].
+///
+/// # Safety
+///
+/// Both bounds pointers must reference readable one-dimensional DLPack tensors
+/// containing `dim` contiguous `f64` values. The callbacks and `user_data` must
+/// remain valid until the returned handle is freed.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn eindir_objective_new(
     dim: usize,
@@ -316,16 +326,21 @@ pub unsafe extern "C" fn eindir_objective_new(
 /// Calls `free_fn(user_data)` if a destructor was registered, frees the bounds
 /// arrays, then frees the struct.  Do NOT call this on embedded objectives;
 /// call the owning struct's free function (e.g. `rgpot_potential_free`) instead.
+///
+/// # Safety
+///
+/// `obj` must be null or a live handle returned by [`eindir_objective_new`],
+/// and the handle must not be used or freed again after this call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn eindir_objective_free(obj: *mut eindir_objective_t) {
     if obj.is_null() {
         return;
     }
     let o = unsafe { &*obj };
-    if let Some(ff) = o.free_fn {
-        if !o.user_data.is_null() {
-            unsafe { ff(o.user_data) };
-        }
+    if let Some(ff) = o.free_fn
+        && !o.user_data.is_null()
+    {
+        unsafe { ff(o.user_data) };
     }
     // Reclaim the bounds arrays allocated in eindir_objective_new.
     if !o.low.is_null() {
@@ -342,6 +357,10 @@ pub unsafe extern "C" fn eindir_objective_free(obj: *mut eindir_objective_t) {
 // ---------------------------------------------------------------------------
 
 /// Returns the number of input dimensions.
+///
+/// # Safety
+///
+/// `obj` must be null or point to a live [`eindir_objective_t`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn eindir_objective_dim(obj: *const eindir_objective_t) -> usize {
     if obj.is_null() {
@@ -351,6 +370,11 @@ pub unsafe extern "C" fn eindir_objective_dim(obj: *const eindir_objective_t) ->
 }
 
 /// Writes the lower-bound vector into `out` (pre-allocated DLPack tensor, shape [dim]).
+///
+/// # Safety
+///
+/// `obj` must point to a live objective and `out` must describe writable,
+/// contiguous `f64` storage for at least `eindir_objective_dim(obj)` values.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn eindir_objective_bounds_low(
     obj: *const eindir_objective_t,
@@ -374,6 +398,11 @@ pub unsafe extern "C" fn eindir_objective_bounds_low(
 }
 
 /// Writes the upper-bound vector into `out` (pre-allocated DLPack tensor, shape [dim]).
+///
+/// # Safety
+///
+/// `obj` must point to a live objective and `out` must describe writable,
+/// contiguous `f64` storage for at least `eindir_objective_dim(obj)` values.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn eindir_objective_bounds_high(
     obj: *const eindir_objective_t,
@@ -401,6 +430,11 @@ pub unsafe extern "C" fn eindir_objective_bounds_high(
 // ---------------------------------------------------------------------------
 
 /// Evaluate the objective at point `x`.
+///
+/// # Safety
+///
+/// `obj` must point to a live objective, `x` must be readable by its registered
+/// callback, and `value_out` must point to writable `f64` storage.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn eindir_objective_eval(
     obj: *const eindir_objective_t,
@@ -428,6 +462,11 @@ pub unsafe extern "C" fn eindir_objective_eval(
 /// Compute the gradient at point `x`.
 ///
 /// Returns `EINDIR_INVALID_PARAMETER` when no gradient callback was registered.
+///
+/// # Safety
+///
+/// `obj` must point to a live objective; `x` and `grad_out` must satisfy the
+/// registered gradient callback's readable-input and writable-output contracts.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn eindir_objective_grad(
     obj: *const eindir_objective_t,
@@ -459,6 +498,10 @@ pub unsafe extern "C" fn eindir_objective_grad(
 }
 
 /// Returns non-zero if the objective has a gradient callback.
+///
+/// # Safety
+///
+/// `obj` must be null or point to a live [`eindir_objective_t`].
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn eindir_objective_has_grad(obj: *const eindir_objective_t) -> i32 {
     if obj.is_null() {

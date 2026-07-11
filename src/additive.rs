@@ -165,7 +165,7 @@ impl AdditiveSurrogate {
         let dim = x.ncols();
         assert_eq!(n, y.len(), "x rows must match y length");
         assert_eq!(dim, bounds.dims, "x cols must match bounds dims");
-        assert!(n >= degree + 1, "need at least degree+1 pilot points");
+        assert!(n > degree, "need at least degree+1 pilot points");
 
         let mean_y = y.sum() / n as f64;
         let mut col_means = Array2::<f64>::zeros((dim, degree));

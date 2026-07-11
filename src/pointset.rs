@@ -42,7 +42,7 @@ fn nth_prime(index: usize) -> u64 {
                 if p > candidate / p {
                     break;
                 }
-                if candidate % p == 0 {
+                if candidate.is_multiple_of(p) {
                     is_prime = false;
                     break;
                 }
