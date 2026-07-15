@@ -107,3 +107,21 @@ fn rosenbrock_one_dimensional_gradient_is_zero() {
     assert_eq!(grad.len(), 1);
     assert!(grad[0].abs() < 1e-12);
 }
+
+#[test]
+fn eval_batch_parallel_matches_serial_rastrigin() {
+    use eindir_core::{Rastrigin, eval_batch_parallel};
+    use ndarray::Array2;
+
+    let obj = Rastrigin::<8>::new();
+    let bounds = obj.bounds();
+    let starts = eindir_core::low_discrepancy_points(bounds, 64, 1);
+    let serial = obj.eval_batch(starts.view());
+    let parallel = eval_batch_parallel(&obj, starts.view());
+    assert_eq!(serial.len(), parallel.len());
+    for (a, b) in serial.iter().zip(parallel.iter()) {
+        assert!((a - b).abs() < 1e-12, "{a} vs {b}");
+    }
+    let tiny = Array2::<f64>::zeros((0, 8));
+    assert_eq!(eval_batch_parallel(&obj, tiny.view()).len(), 0);
+}

@@ -49,7 +49,7 @@ pub use features::{BoxGeometry, box_geometry, compensated_delta, isotropic_propo
 pub use fpair::FPair;
 pub use gle::{GleThermostat, OPTIMAL_SAMPLING_NS, ldl_sqrt, matrix_exp, optimal_sampling_drift};
 pub use gradient::{AnalyticGradient, DifferentiableObjective, FiniteDiffGradient, Gradient};
-pub use objective::Objective;
+pub use objective::{EVAL_BATCH_PARALLEL_MIN, Objective, eval_batch_parallel};
 pub use objectives::{Ackley, Rastrigin, Rosenbrock, StybTang2D};
 pub use pointset::{
     boundary_anchored_low_discrepancy_points, halton_points, halton_unit, low_discrepancy_points,

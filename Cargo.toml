@@ -1,6 +1,6 @@
 [package]
 name = "eindir-core"
-version = "0.5.1"
+version = "0.5.2"
 edition = "2024"
 rust-version = "1.88"
 license = "MIT"
@@ -28,6 +28,7 @@ numpy     = { version = "0.26", optional = true }
 num-traits  = "0.2"
 rand        = "0.9"
 rand_distr  = "0.5"
+rayon       = "1.10"
 
 [dev-dependencies]
 criterion = { version = "0.6", features = ["html_reports"] }

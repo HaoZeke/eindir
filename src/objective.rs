@@ -3,6 +3,10 @@
 use crate::{Bounds, FPair};
 use ndarray::{Array1, ArrayView1, ArrayView2};
 use num_traits::Float;
+use rayon::prelude::*;
+
+/// Minimum batch size before the parallel `eval` fan-out is worth the spawn cost.
+pub const EVAL_BATCH_PARALLEL_MIN: usize = 16;
 
 /// A real-valued function on `R^dim` with a known feasible domain.
 ///
@@ -30,4 +34,25 @@ pub trait Objective<T: Float>: Send + Sync {
     fn global_min(&self) -> Option<&FPair<T>> {
         None
     }
+}
+
+/// Parallel batch evaluation for `Objective<f64>`.
+///
+/// Uses Rayon when `x.nrows() >= EVAL_BATCH_PARALLEL_MIN`; otherwise falls
+/// through to [`Objective::eval_batch`]. Safe for any `Objective<f64>`
+/// (trait requires `Send + Sync`). Prefer this over a hand-rolled loop for
+/// multi-start screening and population proposals.
+pub fn eval_batch_parallel<O>(obj: &O, x: ArrayView2<f64>) -> Array1<f64>
+where
+    O: Objective<f64> + ?Sized,
+{
+    let n = x.nrows();
+    if n < EVAL_BATCH_PARALLEL_MIN {
+        return obj.eval_batch(x);
+    }
+    let mut out = vec![0.0_f64; n];
+    out.par_iter_mut().enumerate().for_each(|(i, slot)| {
+        *slot = obj.eval(x.row(i));
+    });
+    Array1::from(out)
 }

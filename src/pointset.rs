@@ -5,8 +5,12 @@ use std::sync::{Mutex, OnceLock};
 use ndarray::{Array1, Array2, ArrayView1};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
+use rayon::prelude::*;
 
 use crate::Bounds;
+
+/// Rows at which Halton designs fan out across cores.
+const HALTON_PARALLEL_MIN: usize = 64;
 
 const SMALL_PRIMES: [u64; 32] = [
     2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97,
@@ -80,17 +84,35 @@ pub fn halton_unit(index: u64, dim: usize) -> Array1<f64> {
 /// A Halton point set scaled to the supplied box bounds.
 ///
 /// `skip` controls the first Halton index. Use `skip = 1` to avoid the origin.
+/// Large designs (`n >= 64`) fill rows in parallel after warming the shared
+/// prime table.
 pub fn halton_points(bounds: &Bounds<f64>, n: usize, skip: u64) -> Array2<f64> {
-    let mut out = Array2::<f64>::zeros((n, bounds.dims));
-    for row in 0..n {
-        let unit = halton_unit(skip + row as u64, bounds.dims);
-        for axis in 0..bounds.dims {
+    let dim = bounds.dims;
+    if dim > 0 {
+        // Serial prime warm-up so parallel rows only read the cache.
+        let _ = nth_prime(dim - 1);
+    }
+    let widths: Vec<f64> = (0..dim)
+        .map(|axis| {
             let width = bounds.high[axis] - bounds.low[axis];
             assert!(width >= 0.0, "bounds require high >= low on every axis");
-            out[[row, axis]] = bounds.low[axis] + width * unit[axis];
-        }
-    }
-    out
+            width
+        })
+        .collect();
+    let lows = bounds.low.as_slice().expect("bounds.low contiguous").to_vec();
+
+    let fill_row = |row: usize| -> Vec<f64> {
+        let unit = halton_unit(skip + row as u64, dim);
+        (0..dim)
+            .map(|axis| lows[axis] + widths[axis] * unit[axis])
+            .collect()
+    };
+    let flat: Vec<f64> = if n < HALTON_PARALLEL_MIN {
+        (0..n).flat_map(fill_row).collect()
+    } else {
+        (0..n).into_par_iter().flat_map(fill_row).collect()
+    };
+    Array2::from_shape_vec((n, dim), flat).expect("halton shape")
 }
 
 /// Default bounded low-discrepancy design used by optimization front-ends.
@@ -114,17 +136,35 @@ pub fn shifted_halton_points(
         bounds.dims,
         "shift dimension must match bounds dimension"
     );
-    let mut out = Array2::<f64>::zeros((n, bounds.dims));
-    for row in 0..n {
-        let unit = halton_unit(skip + row as u64, bounds.dims);
-        for axis in 0..bounds.dims {
+    let dim = bounds.dims;
+    if dim > 0 {
+        let _ = nth_prime(dim - 1);
+    }
+    let widths: Vec<f64> = (0..dim)
+        .map(|axis| {
             let width = bounds.high[axis] - bounds.low[axis];
             assert!(width >= 0.0, "bounds require high >= low on every axis");
-            let shifted = (unit[axis] + shift[axis]).fract();
-            out[[row, axis]] = bounds.low[axis] + width * shifted;
-        }
-    }
-    out
+            width
+        })
+        .collect();
+    let lows = bounds.low.as_slice().expect("bounds.low contiguous").to_vec();
+    let shift_v = shift.to_vec();
+
+    let fill_row = |row: usize| -> Vec<f64> {
+        let unit = halton_unit(skip + row as u64, dim);
+        (0..dim)
+            .map(|axis| {
+                let shifted = (unit[axis] + shift_v[axis]).fract();
+                lows[axis] + widths[axis] * shifted
+            })
+            .collect()
+    };
+    let flat: Vec<f64> = if n < HALTON_PARALLEL_MIN {
+        (0..n).flat_map(fill_row).collect()
+    } else {
+        (0..n).into_par_iter().flat_map(fill_row).collect()
+    };
+    Array2::from_shape_vec((n, dim), flat).expect("shifted halton shape")
 }
 
 /// Deterministically shifted bounded low-discrepancy design.
