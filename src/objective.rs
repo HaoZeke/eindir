@@ -14,6 +14,11 @@ pub const EVAL_BATCH_PARALLEL_MIN: usize = 16;
 /// `S = R^dim` (with `Bounds`) to `R`. Implementors may override
 /// `eval_batch` and `global_min` for performance or known-optima
 /// instrumentation.
+///
+/// A real-valued function on `R^dim` with a known feasible domain.
+///
+/// Implementors may override `eval_batch` for multi-walker / multi-start
+/// backends (Rayon-native, Python single-attach batch, CUTEst worker pools).
 pub trait Objective<T: Float>: Send + Sync {
     /// Number of input dimensions; matches `bounds().dims`.
     fn dim(&self) -> usize;
@@ -24,7 +29,10 @@ pub trait Objective<T: Float>: Send + Sync {
     /// Evaluates the objective at a single point.
     fn eval(&self, x: ArrayView1<T>) -> T;
 
-    /// Evaluates at a batch of points; default implementation iterates `eval`.
+    /// Evaluates a batch of points (rows of `x`).
+    ///
+    /// Default: serial loop over [`Objective::eval`]. Override for
+    /// multi-walker fan-out (see [`eval_batch_parallel`] for native f64).
     fn eval_batch(&self, x: ArrayView2<T>) -> Array1<T> {
         x.outer_iter().map(|row| self.eval(row)).collect()
     }
@@ -36,12 +44,11 @@ pub trait Objective<T: Float>: Send + Sync {
     }
 }
 
-/// Parallel batch evaluation for `Objective<f64>`.
+/// Parallel multi-walker / multi-start batch evaluation for `Objective<f64>`.
 ///
-/// Uses Rayon when `x.nrows() >= EVAL_BATCH_PARALLEL_MIN`; otherwise falls
-/// through to [`Objective::eval_batch`]. Safe for any `Objective<f64>`
-/// (trait requires `Send + Sync`). Prefer this over a hand-rolled loop for
-/// multi-start screening and population proposals.
+/// Uses Rayon when `x.nrows() >= EVAL_BATCH_PARALLEL_MIN`. Prefer
+/// [`Objective::eval_batch`] when the implementor has a specialized batch
+/// path (Python/CUTEst); this helper is the native Sync hot path.
 pub fn eval_batch_parallel<O>(obj: &O, x: ArrayView2<f64>) -> Array1<f64>
 where
     O: Objective<f64> + ?Sized,
