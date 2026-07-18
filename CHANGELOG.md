@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 <!-- towncrier release notes start -->
 
+## [0.5.2](https://github.com/HaoZeke/eindir/tree/0.5.2) - 2026-07-18
+
+### Added
+
+- Parallel `eval_batch` and Halton design generation via Rayon, with a
+  multi-walker `eval_batch` path sized for population algorithms.
+
+### Fixed
+
+- Documented and hardened the C API FFI contracts (null handling, pointer
+  lifetime and length requirements) for the Objective/Gradient surface.
+
+
 ## [0.5.1](https://github.com/HaoZeke/eindir/tree/0.5.1) - 2026-07-10
 
 ### Added
