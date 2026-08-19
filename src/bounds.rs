@@ -33,6 +33,11 @@ where
     pub fn new(low: Array1<T>, high: Array1<T>, slack: T) -> Self {
         let dims = low.len();
         assert_eq!(low.len(), high.len(), "low and high have different shapes");
+        assert!(slack >= T::zero(), "slack must be non-negative");
+        assert!(
+            low.iter().zip(high.iter()).all(|(&lo, &hi)| lo <= hi),
+            "low must not exceed high in any coordinate"
+        );
         Self {
             low,
             high,
@@ -43,7 +48,9 @@ where
 
     /// True if every coordinate of `x` lies within `slack` of the box.
     pub fn contains(&self, x: ArrayView1<T>) -> bool {
-        x.iter()
+        x.len() == self.dims
+            && x
+                .iter()
             .enumerate()
             .all(|(i, &xi)| xi >= self.low[i] - self.slack && xi <= self.high[i] + self.slack)
     }
