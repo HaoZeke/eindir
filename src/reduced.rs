@@ -234,9 +234,17 @@ impl Gradient<f64> for ChebyshevSurrogate {
 impl<O: Objective<f64> + Gradient<f64>> Gradient<f64> for ReducedObjective<O> {
     fn grad(&self, r: ArrayView1<f64>) -> Array1<f64> {
         // Chain rule through the affine decoder: g_r = W^T @ g_full(decode(r))
+        let lifted = &self.origin + self.basis.dot(&r);
         let x = self.decode(r);
         let g_full = self.inner.grad(x.view());
-        self.basis.t().dot(&g_full)
+        let mut clipped_grad = g_full;
+        for i in 0..clipped_grad.len() {
+            let bounds = self.inner.bounds();
+            if lifted[i] < bounds.low[i] || lifted[i] > bounds.high[i] {
+                clipped_grad[i] = 0.0;
+            }
+        }
+        self.basis.t().dot(&clipped_grad)
     }
     fn dim(&self) -> usize {
         self.bounds.dims
@@ -268,6 +276,17 @@ mod tests {
         // Value equals the inner objective on the diagonal.
         let direct = StybTang2D::new().eval(array![2.0, 2.0].view());
         assert!((reduced.eval(array![2.0].view()) - direct).abs() < 1e-12);
+    }
+
+    #[test]
+    fn reduced_gradient_is_zero_through_clipped_coordinates() {
+        let inner = StybTang2D::new();
+        let origin = array![0.0, 0.0];
+        let basis = Array2::from_shape_vec((2, 1), vec![1.0, 0.0]).unwrap();
+        let reduced = ReducedObjective::new(inner, origin, basis, reduced_box(1, -10.0, 10.0));
+
+        let gradient = reduced.grad(array![6.0].view());
+        assert!(gradient[0].abs() < 1e-12);
     }
 
     #[test]
