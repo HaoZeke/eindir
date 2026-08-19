@@ -17,6 +17,7 @@ impl<const D: usize> Ackley<D> {
 
     /// Constructs an Ackley objective in `D` dimensions.
     pub fn new() -> Self {
+        assert!(D > 0, "Ackley requires at least one dimension");
         Self {
             bounds: Bounds::new(
                 Array1::from_vec(vec![-32.768; D]),

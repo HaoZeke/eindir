@@ -49,9 +49,8 @@ where
     /// True if every coordinate of `x` lies within `slack` of the box.
     pub fn contains(&self, x: ArrayView1<T>) -> bool {
         x.len() == self.dims
-            && x
-                .iter()
-            .enumerate()
+            && x.iter()
+                .enumerate()
             .all(|(i, &xi)| xi >= self.low[i] - self.slack && xi <= self.high[i] + self.slack)
     }
 
@@ -66,6 +65,7 @@ where
 
     /// Clips each coordinate of `x` to the closed `[low, high]` interval.
     pub fn clip(&self, x: ArrayView1<T>) -> Array1<T> {
+        assert_eq!(x.len(), self.dims, "point has the wrong dimension");
         Array1::from_iter(
             x.iter()
                 .enumerate()

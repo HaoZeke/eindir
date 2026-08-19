@@ -109,6 +109,18 @@ fn rosenbrock_one_dimensional_gradient_is_zero() {
 }
 
 #[test]
+#[should_panic(expected = "Ackley requires at least one dimension")]
+fn ackley_rejects_zero_dimensions() {
+    let _ = Ackley::<0>::new();
+}
+
+#[test]
+#[should_panic(expected = "Rosenbrock requires at least one dimension")]
+fn rosenbrock_rejects_zero_dimensions() {
+    let _ = Rosenbrock::<0>::new();
+}
+
+#[test]
 fn eval_batch_parallel_matches_serial_rastrigin() {
     use eindir_core::{Rastrigin, eval_batch_parallel};
     use ndarray::Array2;

@@ -14,6 +14,7 @@ pub struct Rosenbrock<const D: usize> {
 impl<const D: usize> Rosenbrock<D> {
     /// Constructs a Rosenbrock objective in `D` dimensions.
     pub fn new() -> Self {
+        assert!(D > 0, "Rosenbrock requires at least one dimension");
         Self {
             bounds: Bounds::new(
                 Array1::from_vec(vec![-2.048; D]),

@@ -179,6 +179,9 @@ impl ChebyshevSurrogate {
         let mut g = Array1::<f64>::zeros(k);
         for (term, &c) in self.terms.iter().zip(self.coeffs.iter()) {
             for j in 0..k {
+                if x[j] < self.bounds.low[j] || x[j] > self.bounds.high[j] {
+                    continue;
+                }
                 let span = self.bounds.high[j] - self.bounds.low[j];
                 if span.abs() <= f64::EPSILON {
                     continue;
@@ -322,5 +325,11 @@ mod tests {
                 fd
             );
         }
+    }
+
+    #[test]
+    fn chebyshev_gradient_is_zero_outside_clipped_coordinates() {
+        let s = ChebyshevSurrogate::new(reduced_box(1, -1.0, 1.0), vec![vec![1]], array![2.0]);
+        assert_eq!(s.grad(array![2.0].view())[0], 0.0);
     }
 }

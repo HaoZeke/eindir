@@ -62,3 +62,14 @@ proptest! {
         prop_assert!(b.contains(b.clip(arr.view()).view()));
     }
 }
+
+#[test]
+#[should_panic(expected = "point has the wrong dimension")]
+fn clip_rejects_wrong_dimensions() {
+    let bounds = Bounds::new(
+        Array1::from_vec(vec![0.0, 0.0]),
+        Array1::from_vec(vec![1.0, 1.0]),
+        0.0,
+    );
+    let _ = bounds.clip(Array1::from_vec(vec![0.5]).view());
+}

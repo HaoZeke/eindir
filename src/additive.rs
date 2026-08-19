@@ -254,6 +254,9 @@ impl AdditiveSurrogate {
         let dim = self.bounds.dims;
         let mut g = Array1::<f64>::zeros(dim);
         for j in 0..dim {
+            if x[j] < self.bounds.low[j] || x[j] > self.bounds.high[j] {
+                continue;
+            }
             let (lo, hi) = (self.bounds.low[j], self.bounds.high[j]);
             let span = if hi > lo { hi - lo } else { 1.0 };
             let t = self.unit(j, x[j]);
@@ -445,6 +448,16 @@ mod tests {
             let fd = (surr.value(pp.view()) - surr.value(pm.view())) / (2.0 * h);
             assert!((g[j] - fd).abs() < 1e-3, "grad[{j}] {} vs fd {}", g[j], fd);
         }
+    }
+
+    #[test]
+    fn gradient_is_zero_outside_clipped_coordinates() {
+        let bounds = box_bounds(1, -1.0, 1.0);
+        let x = Array2::from_shape_vec((8, 1), vec![-1.0, -0.7, -0.4, -0.1, 0.2, 0.5, 0.8, 1.0])
+            .unwrap();
+        let y = Array1::from_iter(x.column(0).iter().map(|&v| v * v));
+        let surrogate = AdditiveSurrogate::fit(x.view(), y.view(), bounds, 2);
+        assert_eq!(surrogate.gradient(Array1::from_vec(vec![2.0]).view())[0], 0.0);
     }
 
     #[test]
