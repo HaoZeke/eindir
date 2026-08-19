@@ -199,7 +199,7 @@ jobs:
         run: |
           set -euxo pipefail
           # shellcheck disable=SC2086
-          cc -std=c99 -Wall -Wextra \
+          cc -std=c99 -Wall -Wextra -Werror \
              ${{ steps.pcfg.outputs.cflags }} \
              tests/ffi_smoke.c \
              -Wl,-rpath,${{ steps.pcfg.outputs.libdir }} \
