@@ -61,13 +61,21 @@ pub const EINDIR_ABI_FEATURE_BATCH: u64 = 1 << 1;
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct eindir_abi_stamp_t {
+    /// Major ABI revision; incompatible layout changes increment this value.
     pub abi_major: u32,
+    /// Minor ABI revision; additive compatible changes increment this value.
     pub abi_minor: u32,
+    /// Revision of the embedded objective layout.
     pub objective_layout: u32,
+    /// Size of [`eindir_objective_t`] in bytes.
     pub objective_size: usize,
+    /// Alignment of [`eindir_objective_t`] in bytes.
     pub objective_align: usize,
+    /// Major DLPack version used by callbacks.
     pub dlpack_major: u32,
+    /// Minor DLPack version used by callbacks.
     pub dlpack_minor: u32,
+    /// Bitset describing supported bridge features.
     pub features: u64,
 }
 
@@ -211,14 +219,14 @@ pub unsafe extern "C" fn eindir_core_abi_compatible(
     }
     let expected = eindir_core_abi_stamp();
     let actual = unsafe { *stamp };
-    actual.abi_major == expected.abi_major
+    (actual.abi_major == expected.abi_major
         && actual.abi_minor <= expected.abi_minor
         && actual.objective_layout == expected.objective_layout
         && actual.objective_size == expected.objective_size
         && actual.objective_align == expected.objective_align
         && actual.dlpack_major == expected.dlpack_major
         && actual.dlpack_minor <= expected.dlpack_minor
-        && actual.features & !expected.features == 0
+        && actual.features & !expected.features == 0) as i32
 }
 
 // ---------------------------------------------------------------------------
