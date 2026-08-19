@@ -39,11 +39,12 @@ pub trait Gradient<T: Float>: Send + Sync {
 
 /// An `Objective` that can also supply its gradient (natively or via adapter).
 ///
-/// Blanket impl for any `O: Objective<T> + Gradient<T>`.  Concrete types
-/// (surrogates, PyObjective with grad, builtins) can override
-/// `value_and_gradient` for a fused implementation that re-uses
-/// intermediate work (exactly as a Ceres CostFunction computes residuals
-/// and Jacobians in one shot).
+/// There is no blanket impl: a type that is `Objective + Gradient` must
+/// write `impl DifferentiableObjective<T> for T { }` (empty, default
+/// split eval) or override [`DifferentiableObjective::value_and_gradient`]
+/// for a fused `(f, ∇f)` that reuses intermediate work (Ceres-style
+/// residual + Jacobian in one shot). A blanket impl would make that
+/// override E0119.
 pub trait DifferentiableObjective<T: Float>: Objective<T> + Gradient<T> {
     /// Returns `(f(x), ∇f(x))`.  Default calls the two methods separately;
     /// analytic implementations should override for efficiency.
@@ -51,8 +52,6 @@ pub trait DifferentiableObjective<T: Float>: Objective<T> + Gradient<T> {
         (self.eval(x), self.grad(x))
     }
 }
-
-impl<T: Float, O> DifferentiableObjective<T> for O where O: Objective<T> + Gradient<T> {}
 
 /// Closure-based analytic gradient (the common case for user Rust code
 /// that has a hand-derived or AD-produced `x |-> ∇f(x)`).
@@ -126,5 +125,48 @@ impl<O: Objective<f64> + Send + Sync> Gradient<f64> for FiniteDiffGradient<O> {
     }
     fn dim(&self) -> usize {
         self.obj.dim()
+    }
+}
+
+#[cfg(test)]
+mod fused_override_tests {
+    use super::*;
+    use crate::{Bounds, Objective};
+    use ndarray::{Array1, ArrayView1};
+
+    struct Counted;
+    impl Objective<f64> for Counted {
+        fn dim(&self) -> usize {
+            1
+        }
+        fn bounds(&self) -> &Bounds<f64> {
+            static CELL: std::sync::OnceLock<Bounds<f64>> = std::sync::OnceLock::new();
+            CELL.get_or_init(|| Bounds::new(Array1::from_elem(1, -1.0), Array1::from_elem(1, 1.0), 0.0))
+        }
+        fn eval(&self, _x: ArrayView1<f64>) -> f64 {
+            panic!("split eval must not run when value_and_gradient is fused")
+        }
+    }
+    impl Gradient<f64> for Counted {
+        fn dim(&self) -> usize {
+            1
+        }
+        fn grad(&self, _x: ArrayView1<f64>) -> Array1<f64> {
+            panic!("split grad must not run when value_and_gradient is fused")
+        }
+    }
+    impl DifferentiableObjective<f64> for Counted {
+        fn value_and_gradient(&self, x: ArrayView1<f64>) -> (f64, Array1<f64>) {
+            (x[0] * x[0], Array1::from_elem(1, 2.0 * x[0]))
+        }
+    }
+
+    #[test]
+    fn override_is_fused() {
+        let obj = Counted;
+        let x = Array1::from_elem(1, 3.0);
+        let (v, g) = obj.value_and_gradient(x.view());
+        assert_eq!(v, 9.0);
+        assert_eq!(g[0], 6.0);
     }
 }

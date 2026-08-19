@@ -19,7 +19,7 @@
 //! at native CUTEst sizes. A Metropolis accept against the true objective
 //! debiases the mean-field error when the objective is not separable.
 
-use crate::{Bounds, Objective, gradient::Gradient};
+use crate::{Bounds, DifferentiableObjective, Objective, gradient::Gradient};
 use ndarray::{Array1, Array2, ArrayView1, ArrayView2};
 use rand::Rng;
 
@@ -373,6 +373,8 @@ impl Gradient<f64> for AdditiveSurrogate {
         self.bounds.dims
     }
 }
+
+impl DifferentiableObjective<f64> for AdditiveSurrogate {}
 
 #[cfg(test)]
 mod tests {

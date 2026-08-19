@@ -1,6 +1,6 @@
 //! N-dimensional Rastrigin: highly multimodal benchmark.
 
-use crate::{Bounds, FPair, Objective, gradient::Gradient};
+use crate::{Bounds, DifferentiableObjective, FPair, Objective, gradient::Gradient};
 use ndarray::{Array1, ArrayView1};
 use std::sync::OnceLock;
 
@@ -70,3 +70,5 @@ impl<const D: usize> Gradient<f64> for Rastrigin<D> {
         D
     }
 }
+
+impl<const D: usize> DifferentiableObjective<f64> for Rastrigin<D> {}

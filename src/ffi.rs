@@ -50,6 +50,27 @@ pub enum eindir_status_t {
     EINDIR_INTERNAL_ERROR = 2,
 }
 
+/// Stable ABI family name for the embeddable objective handle.
+pub const EINDIR_ABI_FAMILY: &[u8] = b"eindir.objective\0";
+/// Feature bit indicating that analytic gradients are supported by the handle.
+pub const EINDIR_ABI_FEATURE_GRADIENT: u64 = 1 << 0;
+/// Feature bit indicating that batched objective evaluation is supported.
+pub const EINDIR_ABI_FEATURE_BATCH: u64 = 1 << 1;
+
+/// ABI metadata exchanged by native eindir-compatible consumers.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct eindir_abi_stamp_t {
+    pub abi_major: u32,
+    pub abi_minor: u32,
+    pub objective_layout: u32,
+    pub objective_size: usize,
+    pub objective_align: usize,
+    pub dlpack_major: u32,
+    pub dlpack_minor: u32,
+    pub features: u64,
+}
+
 // ---------------------------------------------------------------------------
 // Thread-local error message
 // ---------------------------------------------------------------------------
@@ -158,6 +179,47 @@ pub struct eindir_objective_t {
 // Safety: user_data pointer is opaque; caller guarantees thread safety.
 unsafe impl Send for eindir_objective_t {}
 unsafe impl Sync for eindir_objective_t {}
+
+/// Returns the stable ABI family name as a NUL-terminated ASCII string.
+#[unsafe(no_mangle)]
+pub extern "C" fn eindir_core_abi_family() -> *const c_char {
+    EINDIR_ABI_FAMILY.as_ptr().cast()
+}
+
+/// Returns the native ABI metadata for [`eindir_objective_t`].
+#[unsafe(no_mangle)]
+pub extern "C" fn eindir_core_abi_stamp() -> eindir_abi_stamp_t {
+    eindir_abi_stamp_t {
+        abi_major: 1,
+        abi_minor: 0,
+        objective_layout: 1,
+        objective_size: std::mem::size_of::<eindir_objective_t>(),
+        objective_align: std::mem::align_of::<eindir_objective_t>(),
+        dlpack_major: 1,
+        dlpack_minor: 0,
+        features: EINDIR_ABI_FEATURE_GRADIENT | EINDIR_ABI_FEATURE_BATCH,
+    }
+}
+
+/// Returns nonzero when `stamp` can be consumed by this eindir ABI.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn eindir_core_abi_compatible(
+    stamp: *const eindir_abi_stamp_t,
+) -> i32 {
+    if stamp.is_null() {
+        return 0;
+    }
+    let expected = eindir_core_abi_stamp();
+    let actual = unsafe { *stamp };
+    actual.abi_major == expected.abi_major
+        && actual.abi_minor <= expected.abi_minor
+        && actual.objective_layout == expected.objective_layout
+        && actual.objective_size == expected.objective_size
+        && actual.objective_align == expected.objective_align
+        && actual.dlpack_major == expected.dlpack_major
+        && actual.dlpack_minor <= expected.dlpack_minor
+        && actual.features & !expected.features == 0
+}
 
 // ---------------------------------------------------------------------------
 // DLPack tensor helpers (internal)
@@ -522,7 +584,7 @@ pub unsafe extern "C" fn eindir_objective_has_grad(obj: *const eindir_objective_
 // eindir_objective_t and provides the Objective<f64> / Gradient<f64> surfaces.
 // ---------------------------------------------------------------------------
 
-use crate::{Bounds, Objective};
+use crate::{Bounds, DifferentiableObjective, Objective};
 use ndarray::{Array1, ArrayView1};
 
 /// Rust-side view over a C objective, implementing Objective/Gradient.
@@ -599,6 +661,8 @@ impl Gradient<f64> for EindirObjectiveWrapper<'_> {
     }
 }
 
+impl DifferentiableObjective<f64> for EindirObjectiveWrapper<'_> {}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -612,6 +676,19 @@ mod tests {
         let ptr = eindir_core_version();
         let s = unsafe { std::ffi::CStr::from_ptr(ptr) };
         assert!(!s.to_str().unwrap().is_empty());
+    }
+
+    #[test]
+    fn abi_stamp_describes_the_embedded_objective_contract() {
+        let stamp = eindir_core_abi_stamp();
+        assert_eq!(stamp.abi_major, 1);
+        assert_eq!(stamp.abi_minor, 0);
+        assert_eq!(stamp.objective_layout, 1);
+        assert_eq!(stamp.objective_size, std::mem::size_of::<eindir_objective_t>());
+        assert_eq!(stamp.objective_align, std::mem::align_of::<eindir_objective_t>());
+        assert_eq!(stamp.dlpack_major, 1);
+        assert_eq!(stamp.dlpack_minor, 0);
+        assert!(stamp.features & EINDIR_ABI_FEATURE_GRADIENT != 0);
     }
 
     unsafe extern "C" fn sum_eval(

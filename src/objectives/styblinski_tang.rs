@@ -1,6 +1,6 @@
 //! Styblinski-Tang 2D: a non-convex benchmark with a single global minimum.
 
-use crate::{Bounds, FPair, Objective, gradient::Gradient};
+use crate::{Bounds, DifferentiableObjective, FPair, Objective, gradient::Gradient};
 use ndarray::{Array1, ArrayView1};
 use std::sync::OnceLock;
 
@@ -67,3 +67,5 @@ impl Gradient<f64> for StybTang2D {
         2
     }
 }
+
+impl DifferentiableObjective<f64> for StybTang2D {}

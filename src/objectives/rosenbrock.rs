@@ -1,6 +1,6 @@
 //! N-dimensional Rosenbrock: classic banana-shaped valley benchmark.
 
-use crate::{Bounds, FPair, Objective, gradient::Gradient};
+use crate::{Bounds, DifferentiableObjective, FPair, Objective, gradient::Gradient};
 use ndarray::{Array1, ArrayView1};
 use std::sync::OnceLock;
 
@@ -82,3 +82,5 @@ impl<const D: usize> Gradient<f64> for Rosenbrock<D> {
         D
     }
 }
+
+impl<const D: usize> DifferentiableObjective<f64> for Rosenbrock<D> {}
