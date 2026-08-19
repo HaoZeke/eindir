@@ -18,6 +18,7 @@ default = []
 capi = []
 py-objective = ["dep:pyo3", "dep:numpy", "dlpk/pyo3"]
 python = ["py-objective"]
+autodiff = ["dep:num-dual", "dep:nalgebra"]
 
 [dependencies]
 thiserror = "2"
@@ -26,6 +27,8 @@ dlpk      = { version = "0.1.5", features = ["ndarray", "half"] }
 pyo3      = { version = "0.26", features = ["extension-module", "abi3-py310"], optional = true }
 numpy     = { version = "0.26", optional = true }
 num-traits  = "0.2"
+num-dual    = { version = "0.13", optional = true }
+nalgebra    = { version = "0.34", optional = true }
 rand        = "0.9"
 rand_distr  = "0.5"
 rayon       = "1.10"

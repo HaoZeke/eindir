@@ -5,6 +5,9 @@
 //! gradients, surrogates, point sets, and builtin objective implementations)
 //! consumed by `anneal-core`.
 
+/// Forward-mode automatic differentiation via `num-dual`.
+#[cfg(feature = "autodiff")]
+pub mod autodiff;
 /// Separable rank-1 surrogate and its tempered independence sampler.
 pub mod additive;
 /// Box bounds on N-dimensional points.
@@ -42,6 +45,8 @@ pub mod reduced;
 /// Shared algebra-facing type definitions.
 pub mod types;
 
+#[cfg(feature = "autodiff")]
+pub use autodiff::{DualField, ForwardAd};
 pub use additive::AdditiveSurrogate;
 pub use bounds::Bounds;
 pub use error::Error;
