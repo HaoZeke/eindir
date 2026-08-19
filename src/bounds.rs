@@ -34,10 +34,15 @@ where
         let dims = low.len();
         assert_eq!(low.len(), high.len(), "low and high have different shapes");
         assert!(slack >= T::zero(), "slack must be non-negative");
-        assert!(
-            low.iter().zip(high.iter()).all(|(&lo, &hi)| lo <= hi),
-            "low must not exceed high in any coordinate"
-        );
+        if let Some(index) = low
+            .iter()
+            .zip(high.iter())
+            .position(|(&lo, &hi)| lo > hi)
+        {
+            panic!(
+                "low[{index}] must be strictly less than high[{index}]: low must not exceed high in any coordinate"
+            );
+        }
         Self {
             low,
             high,
