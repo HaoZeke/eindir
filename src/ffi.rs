@@ -19,7 +19,7 @@
 //! - call the consumer's own destructor rather than `eindir_objective_free`.
 
 use std::cell::RefCell;
-use std::ffi::CString;
+use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_void};
 
 use dlpk::sys::DLManagedTensorVersioned;
@@ -61,6 +61,14 @@ pub const EINDIR_ABI_FEATURE_BATCH: u64 = 1 << 1;
 pub const EINDIR_OBJECTIVE_OPERATION_ENERGY: u64 = 1 << 0;
 /// Objective operation bit indicating that the gradient callback is available.
 pub const EINDIR_OBJECTIVE_OPERATION_FORCES: u64 = 1 << 1;
+/// DLPack device code for CPU tensors.
+pub const EINDIR_TENSOR_DEVICE_CPU: i32 = 1;
+/// DLPack dtype code for floating-point tensors.
+pub const EINDIR_TENSOR_DTYPE_FLOAT: i32 = 2;
+/// Tensor contract value for compact row-major storage.
+pub const EINDIR_TENSOR_LAYOUT_CONTIGUOUS: u32 = 1;
+/// Tensor contract value for synchronous borrowed callback inputs/outputs.
+pub const EINDIR_CALLBACK_LIFETIME_BORROWED_SYNC: u32 = 1;
 
 /// Machine-readable semantic metadata for an objective handle.
 #[repr(C)]
@@ -80,6 +88,18 @@ pub struct eindir_objective_descriptor_t {
     pub gradient_sign: i32,
     /// Bitset of supported objective operations.
     pub operations: u64,
+    /// DLPack device type required by callback tensors.
+    pub tensor_device_type: i32,
+    /// DLPack dtype code required by callback tensors.
+    pub tensor_dtype_code: i32,
+    /// DLPack dtype bit width required by callback tensors.
+    pub tensor_dtype_bits: u8,
+    /// DLPack dtype lane count required by callback tensors.
+    pub tensor_dtype_lanes: u8,
+    /// Tensor stride/layout contract.
+    pub tensor_layout: u32,
+    /// Callback ownership/lifetime contract.
+    pub callback_lifetime: u32,
 }
 
 /// ABI metadata exchanged by native eindir-compatible consumers.
@@ -263,6 +283,51 @@ pub unsafe extern "C" fn eindir_objective_descriptor(
         return std::ptr::null();
     }
     unsafe { (*obj).descriptor }
+}
+
+fn descriptor_string_equal(left: *const c_char, right: *const c_char) -> bool {
+    if left.is_null() || right.is_null() {
+        return false;
+    }
+    unsafe { CStr::from_ptr(left) == CStr::from_ptr(right) }
+}
+
+/// Return nonzero when `actual` satisfies every requirement in `required`.
+///
+/// A non-empty producer identifier in `required` is exact; an empty producer
+/// identifier acts as a wildcard. Operation bits are checked as a subset so a
+/// producer may advertise additional capabilities without breaking consumers.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn eindir_objective_descriptor_compatible(
+    actual: *const eindir_objective_descriptor_t,
+    required: *const eindir_objective_descriptor_t,
+) -> i32 {
+    if actual.is_null() || required.is_null() {
+        set_last_error("eindir_objective_descriptor_compatible: NULL descriptor");
+        return 0;
+    }
+    let actual = unsafe { &*actual };
+    let required = unsafe { &*required };
+    let producer_ok = required.producer_id.is_null()
+        || unsafe { CStr::from_ptr(required.producer_id).to_bytes().is_empty() }
+        || descriptor_string_equal(actual.producer_id, required.producer_id);
+    let compatible = descriptor_string_equal(actual.schema_id, required.schema_id)
+        && producer_ok
+        && descriptor_string_equal(actual.length_unit, required.length_unit)
+        && descriptor_string_equal(actual.energy_unit, required.energy_unit)
+        && actual.energy_sign == required.energy_sign
+        && actual.gradient_sign == required.gradient_sign
+        && actual.operations & required.operations == required.operations
+        && actual.tensor_device_type == required.tensor_device_type
+        && actual.tensor_dtype_code == required.tensor_dtype_code
+        && actual.tensor_dtype_bits == required.tensor_dtype_bits
+        && actual.tensor_dtype_lanes == required.tensor_dtype_lanes
+        && actual.tensor_layout == required.tensor_layout
+        && actual.callback_lifetime == required.callback_lifetime;
+    if !compatible {
+        set_last_error("eindir objective semantic descriptor mismatch");
+    }
+    compatible as i32
 }
 
 // ---------------------------------------------------------------------------
@@ -728,7 +793,7 @@ mod tests {
         let stamp = eindir_core_abi_stamp();
         assert_eq!(stamp.abi_major, 1);
         assert_eq!(stamp.abi_minor, 1);
-        assert_eq!(stamp.objective_layout, 2);
+        assert_eq!(stamp.objective_layout, 3);
         assert_eq!(
             stamp.objective_size,
             std::mem::size_of::<eindir_objective_t>()
@@ -740,6 +805,41 @@ mod tests {
         assert_eq!(stamp.dlpack_major, 1);
         assert_eq!(stamp.dlpack_minor, 0);
         assert!(stamp.features & EINDIR_ABI_FEATURE_GRADIENT != 0);
+    }
+
+    #[test]
+    fn semantic_descriptor_compatibility_is_deterministic() {
+        let schema = b"eindir.objective-descriptor.v1\0";
+        let producer = b"rgpot\0";
+        let length = b"angstrom\0";
+        let energy = b"eV\0";
+        let actual = eindir_objective_descriptor_t {
+            schema_id: schema.as_ptr().cast(),
+            producer_id: producer.as_ptr().cast(),
+            length_unit: length.as_ptr().cast(),
+            energy_unit: energy.as_ptr().cast(),
+            energy_sign: 1,
+            gradient_sign: 1,
+            operations: EINDIR_OBJECTIVE_OPERATION_ENERGY
+                | EINDIR_OBJECTIVE_OPERATION_FORCES,
+            tensor_device_type: EINDIR_TENSOR_DEVICE_CPU,
+            tensor_dtype_code: EINDIR_TENSOR_DTYPE_FLOAT,
+            tensor_dtype_bits: 64,
+            tensor_dtype_lanes: 1,
+            tensor_layout: EINDIR_TENSOR_LAYOUT_CONTIGUOUS,
+            callback_lifetime: EINDIR_CALLBACK_LIFETIME_BORROWED_SYNC,
+        };
+        let mut required = actual;
+        required.producer_id = std::ptr::null();
+        assert_eq!(
+            unsafe { eindir_objective_descriptor_compatible(&actual, &required) },
+            1
+        );
+        required.energy_unit = b"hartree\0".as_ptr().cast();
+        assert_eq!(
+            unsafe { eindir_objective_descriptor_compatible(&actual, &required) },
+            0
+        );
     }
 
     unsafe extern "C" fn sum_eval(

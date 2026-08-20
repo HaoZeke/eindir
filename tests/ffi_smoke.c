@@ -6,7 +6,7 @@
 int main(void) {
     const eindir_abi_stamp_t stamp = eindir_core_abi_stamp();
     if (strcmp(eindir_core_abi_family(), "eindir.objective") != 0 ||
-        stamp.abi_major != 1 || stamp.objective_layout != 2 ||
+        stamp.abi_major != 1 || stamp.objective_layout != 3 ||
         stamp.objective_size == 0 || stamp.objective_align == 0 ||
         stamp.dlpack_major != 1 ||
         eindir_core_abi_compatible(&stamp) != 1) {
