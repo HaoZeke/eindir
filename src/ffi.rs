@@ -292,10 +292,15 @@ fn descriptor_string_equal(left: *const c_char, right: *const c_char) -> bool {
     unsafe { CStr::from_ptr(left) == CStr::from_ptr(right) }
 }
 
+fn required_string_matches(actual: *const c_char, required: *const c_char) -> bool {
+    required.is_null() || unsafe { CStr::from_ptr(required).to_bytes().is_empty() }
+        || descriptor_string_equal(actual, required)
+}
+
 /// Return nonzero when `actual` satisfies every requirement in `required`.
 ///
-/// A non-empty producer identifier in `required` is exact; an empty producer
-/// identifier acts as a wildcard. Operation bits are checked as a subset so a
+/// A non-empty string or nonzero scalar in `required` is exact; an empty or
+/// zero field acts as a wildcard. Operation bits are checked as a subset so a
 /// producer may advertise additional capabilities without breaking consumers.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn eindir_objective_descriptor_compatible(
@@ -308,22 +313,25 @@ pub unsafe extern "C" fn eindir_objective_descriptor_compatible(
     }
     let actual = unsafe { &*actual };
     let required = unsafe { &*required };
-    let producer_ok = required.producer_id.is_null()
-        || unsafe { CStr::from_ptr(required.producer_id).to_bytes().is_empty() }
-        || descriptor_string_equal(actual.producer_id, required.producer_id);
+    let producer_ok = required_string_matches(actual.producer_id, required.producer_id);
     let compatible = descriptor_string_equal(actual.schema_id, required.schema_id)
         && producer_ok
-        && descriptor_string_equal(actual.length_unit, required.length_unit)
-        && descriptor_string_equal(actual.energy_unit, required.energy_unit)
-        && actual.energy_sign == required.energy_sign
-        && actual.gradient_sign == required.gradient_sign
+        && required_string_matches(actual.length_unit, required.length_unit)
+        && required_string_matches(actual.energy_unit, required.energy_unit)
+        && (required.energy_sign == 0 || actual.energy_sign == required.energy_sign)
+        && (required.gradient_sign == 0 || actual.gradient_sign == required.gradient_sign)
         && actual.operations & required.operations == required.operations
-        && actual.tensor_device_type == required.tensor_device_type
-        && actual.tensor_dtype_code == required.tensor_dtype_code
-        && actual.tensor_dtype_bits == required.tensor_dtype_bits
-        && actual.tensor_dtype_lanes == required.tensor_dtype_lanes
-        && actual.tensor_layout == required.tensor_layout
-        && actual.callback_lifetime == required.callback_lifetime;
+        && (required.tensor_device_type == 0
+            || actual.tensor_device_type == required.tensor_device_type)
+        && (required.tensor_dtype_code == 0
+            || actual.tensor_dtype_code == required.tensor_dtype_code)
+        && (required.tensor_dtype_bits == 0
+            || actual.tensor_dtype_bits == required.tensor_dtype_bits)
+        && (required.tensor_dtype_lanes == 0
+            || actual.tensor_dtype_lanes == required.tensor_dtype_lanes)
+        && (required.tensor_layout == 0 || actual.tensor_layout == required.tensor_layout)
+        && (required.callback_lifetime == 0
+            || actual.callback_lifetime == required.callback_lifetime);
     if !compatible {
         set_last_error("eindir objective semantic descriptor mismatch");
     }
