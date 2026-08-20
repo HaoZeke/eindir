@@ -65,5 +65,5 @@ pub use reduced::{ChebyshevSurrogate, ReducedObjective};
 #[cfg(feature = "capi")]
 pub use ffi::{
     EindirEvalFn, EindirFreeFn, EindirGradFn, EindirObjectiveWrapper, eindir_abi_stamp_t,
-    eindir_objective_t,
+    eindir_objective_descriptor_t, eindir_objective_t,
 };

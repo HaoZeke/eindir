@@ -57,6 +57,31 @@ pub const EINDIR_ABI_FEATURE_GRADIENT: u64 = 1 << 0;
 /// Feature bit indicating that batched objective evaluation is supported.
 pub const EINDIR_ABI_FEATURE_BATCH: u64 = 1 << 1;
 
+/// Objective operation bit indicating that the value callback is available.
+pub const EINDIR_OBJECTIVE_OPERATION_ENERGY: u64 = 1 << 0;
+/// Objective operation bit indicating that the gradient callback is available.
+pub const EINDIR_OBJECTIVE_OPERATION_FORCES: u64 = 1 << 1;
+
+/// Machine-readable semantic metadata for an objective handle.
+#[repr(C)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct eindir_objective_descriptor_t {
+    /// Descriptor schema identifier, encoded as a NUL-terminated string.
+    pub schema_id: *const c_char,
+    /// Producer/objective identity, encoded as a NUL-terminated string.
+    pub producer_id: *const c_char,
+    /// Cartesian length unit, encoded as a NUL-terminated string.
+    pub length_unit: *const c_char,
+    /// Objective energy unit, encoded as a NUL-terminated string.
+    pub energy_unit: *const c_char,
+    /// Sign convention for the returned energy (+1 means minimization energy).
+    pub energy_sign: i32,
+    /// Sign convention for the returned gradient (+1 means dE/dx).
+    pub gradient_sign: i32,
+    /// Bitset of supported objective operations.
+    pub operations: u64,
+}
+
 /// ABI metadata exchanged by native eindir-compatible consumers.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -182,6 +207,8 @@ pub struct eindir_objective_t {
     /// Set to NULL when embedding; manage cleanup in the derived struct's own
     /// free function.
     pub free_fn: EindirFreeFn,
+    /// Optional semantic descriptor owned by the embedding producer.
+    pub descriptor: *const eindir_objective_descriptor_t,
 }
 
 // Safety: user_data pointer is opaque; caller guarantees thread safety.
@@ -199,8 +226,8 @@ pub extern "C" fn eindir_core_abi_family() -> *const c_char {
 pub extern "C" fn eindir_core_abi_stamp() -> eindir_abi_stamp_t {
     eindir_abi_stamp_t {
         abi_major: 1,
-        abi_minor: 0,
-        objective_layout: 1,
+        abi_minor: 1,
+        objective_layout: 2,
         objective_size: std::mem::size_of::<eindir_objective_t>(),
         objective_align: std::mem::align_of::<eindir_objective_t>(),
         dlpack_major: 1,
@@ -211,9 +238,7 @@ pub extern "C" fn eindir_core_abi_stamp() -> eindir_abi_stamp_t {
 
 /// Returns nonzero when `stamp` can be consumed by this eindir ABI.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn eindir_core_abi_compatible(
-    stamp: *const eindir_abi_stamp_t,
-) -> i32 {
+pub unsafe extern "C" fn eindir_core_abi_compatible(stamp: *const eindir_abi_stamp_t) -> i32 {
     if stamp.is_null() {
         return 0;
     }
@@ -227,6 +252,17 @@ pub unsafe extern "C" fn eindir_core_abi_compatible(
         && actual.dlpack_major == expected.dlpack_major
         && actual.dlpack_minor <= expected.dlpack_minor
         && actual.features & !expected.features == 0) as i32
+}
+
+/// Return the semantic descriptor attached to an objective, or NULL.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn eindir_objective_descriptor(
+    obj: *const eindir_objective_t,
+) -> *const eindir_objective_descriptor_t {
+    if obj.is_null() {
+        return std::ptr::null();
+    }
+    unsafe { (*obj).descriptor }
 }
 
 // ---------------------------------------------------------------------------
@@ -388,6 +424,7 @@ pub unsafe extern "C" fn eindir_objective_new(
         grad_fn,
         user_data,
         free_fn,
+        descriptor: std::ptr::null(),
     }))
 }
 
@@ -690,10 +727,16 @@ mod tests {
     fn abi_stamp_describes_the_embedded_objective_contract() {
         let stamp = eindir_core_abi_stamp();
         assert_eq!(stamp.abi_major, 1);
-        assert_eq!(stamp.abi_minor, 0);
-        assert_eq!(stamp.objective_layout, 1);
-        assert_eq!(stamp.objective_size, std::mem::size_of::<eindir_objective_t>());
-        assert_eq!(stamp.objective_align, std::mem::align_of::<eindir_objective_t>());
+        assert_eq!(stamp.abi_minor, 1);
+        assert_eq!(stamp.objective_layout, 2);
+        assert_eq!(
+            stamp.objective_size,
+            std::mem::size_of::<eindir_objective_t>()
+        );
+        assert_eq!(
+            stamp.objective_align,
+            std::mem::align_of::<eindir_objective_t>()
+        );
         assert_eq!(stamp.dlpack_major, 1);
         assert_eq!(stamp.dlpack_minor, 0);
         assert!(stamp.features & EINDIR_ABI_FEATURE_GRADIENT != 0);
