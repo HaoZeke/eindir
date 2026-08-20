@@ -247,7 +247,7 @@ pub extern "C" fn eindir_core_abi_stamp() -> eindir_abi_stamp_t {
     eindir_abi_stamp_t {
         abi_major: 1,
         abi_minor: 1,
-        objective_layout: 2,
+        objective_layout: 3,
         objective_size: std::mem::size_of::<eindir_objective_t>(),
         objective_align: std::mem::align_of::<eindir_objective_t>(),
         dlpack_major: 1,
