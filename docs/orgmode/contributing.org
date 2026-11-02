@@ -60,6 +60,10 @@ cargo update --workspace
 The scripts call cogapp as =python3 -m cogapp= because =cog= on =PATH= may be cocogitto, which checks commit messages.
 Do not edit the lines between =[[[cog= and =[[[end]]]= by hand.
 
+CI runs =tools/check-version-drift.sh=, which reruns cogapp in =--check= mode and checks =Cargo.lock= with =cargo metadata --locked=.
+It fails on any copy that disagrees with =Cargo.toml=.
+Run it locally before pushing a bump.
+
 * Style
 
 Rust code is formatted with =cargo fmt= and linted with =cargo clippy --all-features -- -D warnings=.
