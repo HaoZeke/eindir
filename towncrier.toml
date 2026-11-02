@@ -1,6 +1,9 @@
 [tool.towncrier]
 name = "eindir"
+# Generated from Cargo.toml; run tools/sync-version.sh after a bump.
+# [[[cog import cargo_version; cog.outl(f'version = "{cargo_version.VERSION}"') ]]]
 version = "0.6.0"
+# [[[end]]]
 directory = "docs/newsfragments"
 filename = "CHANGELOG.md"
 start_string = "<!-- towncrier release notes start -->\n"
