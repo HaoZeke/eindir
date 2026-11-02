@@ -9,7 +9,7 @@
 cmake_minimum_required(VERSION 3.22)
 # Generated from Cargo.toml; run tools/sync-version.sh after a bump.
 # [[[cog import cargo_version; cog.outl(f"project(eindir-core VERSION {cargo_version.VERSION} LANGUAGES C CXX)") ]]]
-project(eindir-core VERSION 0.6.0 LANGUAGES C CXX)
+project(eindir-core VERSION 0.7.0 LANGUAGES C CXX)
 # [[[end]]]
 
 # Corrosion builds the Rust crate from Cargo.toml

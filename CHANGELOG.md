@@ -6,7 +6,57 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 
 <!-- towncrier release notes start -->
 
-## [0.5.2](https://github.com/HaoZeke/eindir/tree/0.5.2) - 2026-07-18
+## [0.7.0](https://github.com/HaoZeke/eindir/tree/v0.7.0) - 2026-11-02
+
+### Added
+
+- C API objective descriptors: `eindir_objective_descriptor()` reports
+  the semantic objective contract, and
+  `eindir_objective_descriptor_compatible()` checks it, with zero and
+  empty fields as wildcards.
+
+### Developer
+
+- The `version` field in `Cargo.toml` is the only hand-written copy of
+  the release version. `pyproject.toml` reads it through maturin, and
+  `meson.build`, `CMakeLists.txt`, `pixi.toml` and `towncrier.toml` hold
+  cogapp-generated copies refreshed by `tools/sync-version.sh`.
+- CI runs `tools/check-version-drift.sh`, which reruns cogapp in
+  `--check` mode, checks `Cargo.lock` and validates the changelog tag
+  links, failing on any drift.
+- Changelog headings link to the `v`-prefixed release tags.
+
+### Changed
+
+- `eindir_core_abi_stamp()` reports objective layout 3 for the new
+  tensor fields.
+- The meson and CMake projects report the crate version (previously a
+  stale 0.5.0), and the meson pkg-config file drops its `_meson` version
+  suffix.
+
+### Fixed
+
+- The generated `eindir-core.h` is valid C again: cbindgen no longer wraps
+  it in a C++ namespace, and tensor arguments use the DLPack
+  `struct DLManagedTensorVersioned` tag so C and C++ consumers can include
+  it.
+
+
+## [0.6.0](https://github.com/HaoZeke/eindir/tree/v0.6.0) - 2026-09-13
+
+### Added
+
+- Optional `autodiff` feature: `ForwardAd` wraps a `DualField` written
+  once over `num-dual` and supplies an exact fused gradient.
+
+### Fixed
+
+- Drop the blanket `DifferentiableObjective` impl so a type can override
+  `value_and_gradient` for a fused `(f, grad)` evaluation. Builtins now
+  carry an explicit empty impl; downstream crates must do the same.
+
+
+## [0.5.2](https://github.com/HaoZeke/eindir/tree/v0.5.2) - 2026-07-18
 
 ### Added
 
@@ -19,14 +69,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   lifetime and length requirements) for the Objective/Gradient surface.
 
 
-## [0.5.1](https://github.com/HaoZeke/eindir/tree/0.5.1) - 2026-07-10
+## [0.5.1](https://github.com/HaoZeke/eindir/tree/v0.5.1) - 2026-07-10
 
 ### Added
 
 - `features` module: `box_geometry` / `BoxGeometry` (dimension, mean width, aspect ratio), `isotropic_proposal_scale`, and `compensated_delta` for numerically safer acceptance-path energy differences.
 
 
-## [0.5.0](https://github.com/HaoZeke/eindir/tree/0.5.0) - 2026-06-26
+## [0.5.0](https://github.com/HaoZeke/eindir/tree/v0.5.0) - 2026-06-26
 
 ### Added
 
@@ -49,7 +99,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
   registry publication of ``eindir-core``.
 
 
-## [0.4.7](https://github.com/HaoZeke/eindir/tree/0.4.7) - 2026-06-08
+## [0.4.7](https://github.com/HaoZeke/eindir/tree/v0.4.7) - 2026-06-08
 
 ### Added
 
@@ -60,35 +110,35 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 - Additive finite-weight guard, GLE import cleanups, and Array1 test-local fixes.
 
 
-## [0.4.4](https://github.com/HaoZeke/eindir/tree/0.4.4) - 2026-06-08
+## [0.4.4](https://github.com/HaoZeke/eindir/tree/v0.4.4) - 2026-06-08
 
 ### Added
 
 - Fitted optimal-sampling GLE drift with a benchmarked colored-noise comparison against white noise.
 
 
-## [0.4.3](https://github.com/HaoZeke/eindir/tree/0.4.3) - 2026-06-08
+## [0.4.3](https://github.com/HaoZeke/eindir/tree/v0.4.3) - 2026-06-08
 
 ### Added
 
 - Native GLE colored-noise thermostat with optimal sampling.
 
 
-## [0.4.2](https://github.com/HaoZeke/eindir/tree/0.4.2) - 2026-06-07
+## [0.4.2](https://github.com/HaoZeke/eindir/tree/v0.4.2) - 2026-06-07
 
 ### Added
 
 - Separable rank-1 surrogate (Additive) + tempered independence sampler.
 
 
-## [0.4.1](https://github.com/HaoZeke/eindir/tree/0.4.1) - 2026-06-07
+## [0.4.1](https://github.com/HaoZeke/eindir/tree/v0.4.1) - 2026-06-07
 
 ### Added
 
 - Bounded low-discrepancy designs (pointset API).
 
 
-## [0.4.0](https://github.com/HaoZeke/eindir/tree/0.4.0) - 2026-06-04
+## [0.4.0](https://github.com/HaoZeke/eindir/tree/v0.4.0) - 2026-06-04
 
 ### Added
 
@@ -97,7 +147,7 @@ Both are first-class Objective implementations.
 Also tvm_ffi tensor interop and Array API namespace helpers.
 
 
-## [0.3.0](https://github.com/HaoZeke/eindir/tree/0.3.0) - 2026-04-26
+## [0.3.0](https://github.com/HaoZeke/eindir/tree/v0.3.0) - 2026-04-26
 
 ### Added
 
@@ -105,7 +155,7 @@ Also tvm_ffi tensor interop and Array API namespace helpers.
 - PyObjective adapter wrapping Python callables into the Objective<f64> algebra.
 
 
-## [0.2.0](https://github.com/HaoZeke/eindir/tree/0.2.0) - 2026-04-25
+## [0.2.0](https://github.com/HaoZeke/eindir/tree/v0.2.0) - 2026-04-25
 
 ### Added
 
@@ -120,13 +170,13 @@ Also tvm_ffi tensor interop and Array API namespace helpers.
 Python sources moved under python/eindir/; wheel ships Rust extension eindir._core.
 
 
-## [0.1.0](https://github.com/HaoZeke/eindir/tree/0.1.0) - 17-02-2024
+## [0.1.0](https://github.com/HaoZeke/eindir/tree/v0.1.0) - 17-02-2024
 
 
 No significant changes.
 
 
-## [0.0.5](https://github.com/HaoZeke/eindir/tree/0.0.5) - 17-02-2024
+## [0.0.5](https://github.com/HaoZeke/eindir/tree/v0.0.5) - 17-02-2024
 
 
 No significant changes.

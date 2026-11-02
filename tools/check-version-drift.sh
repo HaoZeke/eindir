@@ -12,4 +12,6 @@ if ! cargo metadata --locked --format-version 1 >/dev/null; then
     exit 1
 fi
 
+"${PYTHON:-python3}" tools/check_changelog_links.py
+
 echo "All version copies match Cargo.toml"

@@ -12,7 +12,7 @@ project(
     ['rust', 'c'],
     # Generated from Cargo.toml; run tools/sync-version.sh after a bump.
     # [[[cog import cargo_version; cog.outl(f"    version: '{cargo_version.VERSION}',") ]]]
-    version: '0.6.0',
+    version: '0.7.0',
     # [[[end]]]
     meson_version: '>=1.8.0',
     default_options: [

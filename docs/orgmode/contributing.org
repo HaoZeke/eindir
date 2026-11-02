@@ -62,6 +62,8 @@ Do not edit the lines between =[[[cog= and =[[[end]]]= by hand.
 
 CI runs =tools/check-version-drift.sh=, which reruns cogapp in =--check= mode and checks =Cargo.lock= with =cargo metadata --locked=.
 It fails on any copy that disagrees with =Cargo.toml=.
+It also runs =tools/check_changelog_links.py=, which requires every =CHANGELOG.md= heading to link to its =v=-prefixed tag (=v0.7.0= and so on).
+After tagging, =python3 tools/check_changelog_links.py --remote origin= confirms that every linked tag exists.
 Run it locally before pushing a bump.
 
 * Style
