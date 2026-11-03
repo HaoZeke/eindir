@@ -5,6 +5,88 @@
 
 A set of "particles" or components mainly focused on working with functions in ND.
 
+The Rust crate `eindir-core` has the primitives: objectives over box bounds, Halton point sets, gradients, a coloured-noise thermostat for the generalized Langevin equation (GLE) and Chebyshev surrogates.
+The Python package `eindir` covers the bounds, the objectives and the point sets, and a C library with a C++ header lets native codes pass objectives through the same interface.
+
+## Quick start
+
+Python, after `pip install eindir`, or `maturin develop --features python` in a checkout:
+
+```python
+import numpy as np
+import eindir
+from eindir import _core
+
+low = np.array([-5.12, -5.12])
+high = np.array([5.12, 5.12])
+obj = _core.PyObjective(lambda x: float(np.sum((x - 1.0) ** 2)), _core.Bounds(low, high))
+
+starts = eindir.low_discrepancy_points(low, high, 8)
+values = [obj.eval(row) for row in starts]
+best = int(np.argmin(values))
+print(starts[best], values[best])
+```
+
+```text
+[1.28       2.84444444] 3.480375308641971
+```
+
+Rust, with `eindir-core = "0.6"` and `ndarray = "0.17"` under `[dependencies]`, or `eindir-core = { git = "https://github.com/HaoZeke/eindir" }` for the main branch:
+
+```rust
+use eindir_core::{Bounds, Objective, low_discrepancy_points};
+use ndarray::{ArrayView1, array};
+
+struct Sphere {
+    bounds: Bounds<f64>,
+}
+
+impl Objective<f64> for Sphere {
+    fn dim(&self) -> usize {
+        self.bounds.dims
+    }
+
+    fn bounds(&self) -> &Bounds<f64> {
+        &self.bounds
+    }
+
+    fn eval(&self, x: ArrayView1<f64>) -> f64 {
+        x.iter().map(|xi| (xi - 1.0).powi(2)).sum()
+    }
+}
+
+fn main() {
+    let bounds = Bounds::new(array![-5.12, -5.12], array![5.12, 5.12], 1e-6);
+    let obj = Sphere { bounds };
+    let starts = low_discrepancy_points(obj.bounds(), 8, 1);
+    let values = obj.eval_batch(starts.view());
+    let best = (0..values.len())
+        .min_by(|&a, &b| values[a].total_cmp(&values[b]))
+        .unwrap();
+    println!("{} {}", starts.row(best), values[best]);
+}
+```
+
+```text
+[1.2800000000000002, 2.844444444444443] 3.480375308641971
+```
+
+Both draw the same Halton points.
+The GLE thermostat, the surrogates and the gradient adapters have no Python binding.
+The Python examples on the Quickstart page and in four tutorials stop with ImportError.
+The [Python skill](https://github.com/HaoZeke/eindir/blob/main/skills/eindir-python/SKILL.md) lists what `eindir` exports.
+
+## Documentation
+
+The manual is at https://eindir.rgoswami.me/.
+Its sources are the Org files in `docs/orgmode/`, and `pixi run -e docs docbld` builds it into `docs/build/`.
+
+- [llms.txt](https://raw.githubusercontent.com/HaoZeke/eindir/main/llms.txt) indexes the manual, and [llms-full.txt](https://raw.githubusercontent.com/HaoZeke/eindir/main/llms-full.txt) has every page in one Markdown file, with `AGENTS.md` and the skills.
+  `scripts/llms/build_llms.py` writes both.
+- [AGENTS.md](https://github.com/HaoZeke/eindir/blob/main/AGENTS.md) has the build, test and docs commands as CI runs them, and the mistakes that are easy to make with each binding.
+- [skills/](https://github.com/HaoZeke/eindir/tree/main/skills) has task guides for Python, Rust, the C ABI and making a change.
+  CI runs their examples.
+
 ## Development
 
 The crate needs Rust 1.88 or newer (edition 2024).
