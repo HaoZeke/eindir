@@ -17,7 +17,8 @@ maintainers = [
     { name = "Ruhila S",       email = "ruhila@ieee.org" },
     { name = "Amrita Goswami", email = "amrita@hi.is" },
 ]
-version = "0.5.1"
+# maturin takes the version from Cargo.toml.
+dynamic = ["version"]
 requires-python = ">=3.10"
 license = "MIT"
 readme = "README.md"

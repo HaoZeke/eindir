@@ -1,11 +1,14 @@
 [tool.towncrier]
 name = "eindir"
-version = "0.6.0"
+# Generated from Cargo.toml; run tools/sync-version.sh after a bump.
+# [[[cog import cargo_version; cog.outl(f'version = "{cargo_version.VERSION}"') ]]]
+version = "0.7.0"
+# [[[end]]]
 directory = "docs/newsfragments"
 filename = "CHANGELOG.md"
 start_string = "<!-- towncrier release notes start -->\n"
 underlines = ["", "", ""]
-title_format = "## [{version}](https://github.com/HaoZeke/eindir/tree/{version}) - {project_date}"
+title_format = "## [{version}](https://github.com/HaoZeke/eindir/tree/v{version}) - {project_date}"
 issue_format = "[#{issue}](https://github.com/HaoZeke/eindir/issues/{issue})"
 
 [[tool.towncrier.type]]

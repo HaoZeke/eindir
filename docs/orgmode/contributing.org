@@ -36,8 +36,35 @@ pixi r towncrier-draft   # preview, no write
 pixi r towncrier-build   # write to CHANGELOG.md and consume fragments
 #+END_SRC
 
-Run the build step as part of preparing a release tag (after version bump in relevant files).
+Run the build step as part of preparing a release tag, after the version bump described below.
 Fragments are required for changes that should appear in release notes.
+
+* Versioning
+
+The =version= field in =Cargo.toml= is the only place the release version is written by hand.
+Everything else derives from it:
+
+- =Cargo.lock= is updated by cargo.
+- =pyproject.toml= declares =dynamic = ["version"]=, so maturin reads =Cargo.toml=.
+- =eindir_core_version()= in the C API and =eindir._core.__version__= use the crate version at compile time.
+- =meson.build=, =CMakeLists.txt=, =pixi.toml= and =towncrier.toml= carry generated copies between cogapp markers that import =tools/cargo_version.py=.
+
+To bump the version, edit =Cargo.toml=, then regenerate the copies and the lock file:
+
+#+BEGIN_SRC bash
+python3 -m pip install cogapp
+tools/sync-version.sh
+cargo update --workspace
+#+END_SRC
+
+The scripts call cogapp as =python3 -m cogapp= because =cog= on =PATH= may be cocogitto, which checks commit messages.
+Do not edit the lines between =[[[cog= and =[[[end]]]= by hand.
+
+CI runs =tools/check-version-drift.sh=, which reruns cogapp in =--check= mode and checks =Cargo.lock= with =cargo metadata --locked=.
+It fails on any copy that disagrees with =Cargo.toml=.
+It also runs =tools/check_changelog_links.py=, which requires every =CHANGELOG.md= heading to link to its =v=-prefixed tag (=v0.7.0= and so on).
+After tagging, =python3 tools/check_changelog_links.py --remote origin= confirms that every linked tag exists.
+Run it locally before pushing a bump.
 
 * Style
 

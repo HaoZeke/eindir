@@ -15,7 +15,9 @@ cargo cinstall --release --prefix /usr/local
 pkg-config --cflags --libs eindir-core
 #+END_SRC
 
-A hand-written companion header =eindir-core.hpp= wraps the C declarations in =namespace eindir= for ergonomic C++ usage.
+The generated header is plain C with global declarations and compiles as both C and C++ against DLPack 1.0 headers.
+Tensor arguments use =struct DLManagedTensorVersioned= as declared by =dlpack/dlpack.h=.
+A hand-written companion header =eindir-core.hpp= adds C++ helpers in =namespace eindir=.
 
 * Build-system glue
 

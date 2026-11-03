@@ -4,8 +4,9 @@
  * \file eindir-core.hpp
  * \brief C++ companion header for eindir-core.
  *
- * Hand-written companion to the cbindgen-generated `eindir-core.h`. Wraps
- * the C ABI exports in the `eindir` namespace for ergonomic C++ usage.
+ * Hand-written companion to the cbindgen-generated `eindir-core.h`. The C
+ * header is usable from C++ on its own; this file adds C++ helpers in the
+ * `eindir` namespace.
  */
 
 #include "eindir-core.h"

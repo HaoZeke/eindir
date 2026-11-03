@@ -10,7 +10,10 @@
 project(
     'eindir-core',
     ['rust', 'c'],
-    version: '0.5.0',
+    # Generated from Cargo.toml; run tools/sync-version.sh after a bump.
+    # [[[cog import cargo_version; cog.outl(f"    version: '{cargo_version.VERSION}',") ]]]
+    version: '0.7.0',
+    # [[[end]]]
     meson_version: '>=1.8.0',
     default_options: [
         'buildtype=debugoptimized',
@@ -154,12 +157,11 @@ endif
 # Pkgconf generation
 
 pkg = import('pkgconfig')
-pkg_ver = meson.project_version()
 pkg_install_dir = join_paths(get_option('datadir'), 'pkgconfig')
 pkg.generate(
     name: 'eindir-core',
     filebase: 'meson-eindir-core',
     description: 'ND objective function and sampling primitives',
-    version: f'@pkg_ver@_meson',
+    version: meson.project_version(),
     install_dir: pkg_install_dir,
 )

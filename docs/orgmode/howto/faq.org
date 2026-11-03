@@ -11,5 +11,5 @@ The low-discrepancy, GLE thermostat, surrogates, and Objective trait are standal
 
 * What about C/C++ consumers?
 cargo-c produces the C ABI + pkg-config.
-The hand-written C++ header gives a namespace wrapper.
+The generated header works from both C and C++; the hand-written C++ header adds helpers in =namespace eindir=.
 See =include/eindir-core.hpp= and the bindings page.
