@@ -1,0 +1,99 @@
+# Input for scripts/llms/build_llms.py. It writes llms.txt and
+# llms-full.txt at the repository root from the Org sources under
+# docs/orgmode/, in the order of the toctrees in docs/orgmode/index.org,
+# then AGENTS.md and the skills. Links go to the sources on GitHub.
+#
+#   python3 scripts/llms/build_llms.py           # rewrite both files
+#   python3 scripts/llms/build_llms.py --check   # exit 1 if either is stale
+
+[project]
+branch = "main"
+full_note = "The pages follow in the order of the site's navigation, converted from Org to Markdown. The Rust API reference that Sphinx generates from the doc comments in `src/` is not included, so read the sources or run `cargo doc --open`."
+links = "raw"
+name = "eindir"
+# Drop the first two sentences of the second note once the Python
+# examples in the manual run.
+notes = [
+  "Each link points at the Org source of a page under `docs/orgmode/` on GitHub. The site, https://eindir.rgoswami.me/, is built from the same sources by Sphinx, and `llms-full.txt` has every page as Markdown in one file.",
+  "Five pages of the site have Python examples that stop with ImportError. They are the Quickstart page and the Python quickstart, low-discrepancy, GLE and surrogate tutorials. The Python package is narrower than the Rust crate. `eindir` exports `NumLimit`, `FPair`, `ObjectiveFunction`, `OutOfBounds`, `low_discrepancy_points`, `styblinski_tang` and array API, DLPack and TVM-FFI helpers, and `eindir._core` adds `Bounds`, `PyObjective` and `shifted_low_discrepancy_points`. `GleThermostat`, `optimal_sampling_drift`, `matrix_exp`, `ldl_sqrt`, `halton_unit`, the surrogates, the gradient adapters and the builtin objective types are Rust-only. The `eindir-python` skill shows the calls that work.",
+  "That skill and the three others under `skills/` give worked examples of common tasks, with scripts that CI runs. `AGENTS.md` has the build, test and documentation commands and the mistakes that are easy to make. Both are reproduced at the end of `llms-full.txt`.",
+]
+repo = "https://github.com/HaoZeke/eindir"
+summary = """
+eindir is a Rust crate, eindir-core, with Python, C and C++ bindings.
+It has the primitives for bounded optimisation and sampling on R^D:
+the Objective trait, box bounds, Halton point sets, gradients, a GLE
+coloured-noise thermostat and surrogate models. The anneal optimiser is
+built on it.
+"""
+
+[output]
+full = "llms-full.txt"
+index = "llms.txt"
+
+[docs]
+index = "index.org"
+optional = ["changelog", "code_of_conduct"]
+# changelog.org only includes CHANGELOG.md, which is read directly.
+org_exclude = ["changelog"]
+root = "docs/orgmode"
+section_order = [
+  "Getting started",
+  "How-to Guides",
+  "Explanation",
+  "Reference",
+  "Development",
+  "Skills",
+]
+
+[docs.sources]
+changelog = "CHANGELOG.md"
+
+[titles]
+faq = "Project FAQ"
+"howto/faq" = "Usage FAQ"
+index = "Overview"
+
+[descriptions]
+architecture = "Describes the repository layout, the three crate types (rlib, cdylib, staticlib) and how the Python, C and C++ bindings are produced."
+bindings = "Describes how the Python wheel, the C library with its header and pkg-config file, and the C++ helper header are built, with Meson and CMake snippets for consumers."
+changelog = "Release notes, newest first."
+code_of_conduct = "The Contributor Covenant 2.1, as adopted by the project."
+contributing = "Setup, commit types, towncrier fragments, the single version source in Cargo.toml and how to bump it, style and tests."
+"dev/best_practices" = "Use one Objective for every driver, prefer low-discrepancy starts, reuse a fitted GLE drift, use surrogates as objectives or proposals, and keep arrays in one array namespace."
+"explanation/gle" = "What the GLE thermostat stores and computes, why the covariance fixes correctness while the drift sets the speed, and how anneal drives it."
+"explanation/primitives" = "The design of the Objective, low-discrepancy, GLE and surrogate primitives and how they feed one another."
+"explanation/surrogates" = "The additive surrogate as a rank-1 functional tensor train, its O(d) independence sampling and the Metropolis correction on the true objective."
+faq = "The licence (MIT) and how to cite eindir."
+"howto/faq" = "Gradients for the GLE and Hamiltonian Monte Carlo (HMC) drivers, using eindir without anneal, and C and C++ consumers."
+"howto/gradients" = "How to give an objective a gradient, and the finite-difference fallback when it has none."
+"howto/install" = "Install the wheel from PyPI, the pixi environments, or build from source with cargo, cargo-c and maturin."
+"howto/using-with-anneal" = "Where each primitive plugs into the Obj, Cool, Neigh, Move and Accept components of anneal."
+index = "What eindir provides, its bindings, the pages to read first, and how it relates to anneal."
+quickstart = "Install commands, then Python examples for an objective with low-discrepancy starts and for a standalone GLE thermostat."
+"reference/api-primitives" = "A list of core symbol names. Of these only `low_discrepancy_points` (in `eindir`) and `Bounds` (in `eindir._core`) exist in Python, and the rest are Rust items."
+"reference/glossary" = "One-line definitions of Objective, low_discrepancy_points, GLE, AdditiveSurrogate, ReducedObjective and optimal_sampling_drift."
+"reference/rust-api" = "The entry page of the Rust API reference that Sphinx generates from the doc comments of the crate."
+spec = "One sentence on the primitives the crate exposes."
+tutorials = "Install from pip, pixi or source, print the extension version, and build a NumLimit box from Python."
+"tutorials/gle-thermostat" = "Why coloured noise helps on ill-conditioned objectives, and the drift, thermostat and stationary-sampling calls."
+"tutorials/low-discrepancy" = "Bounded Halton point sets from low_discrepancy_points(low, high, n, skip), with a 2-D example."
+"tutorials/quickstart" = "Define a Python objective, draw low-discrepancy starts inside its bounds and evaluate them."
+"tutorials/surrogates" = "The additive (rank-1 Chebyshev), total-degree Chebyshev and reduced (active subspace) surrogates and their construction."
+
+[[links]]
+description = "Build, test and documentation commands, common tasks and pitfalls for working in this repository."
+full = true
+path = "AGENTS.md"
+section = "Development"
+title = "AGENTS.md"
+
+[[links]]
+description = "The whole manual, AGENTS.md and the skills as one Markdown file."
+path = "llms-full.txt"
+section = "Optional"
+title = "llms-full.txt"
+
+[skills]
+dir = "skills"
+full = true
