@@ -141,7 +141,9 @@ mod fused_override_tests {
         }
         fn bounds(&self) -> &Bounds<f64> {
             static CELL: std::sync::OnceLock<Bounds<f64>> = std::sync::OnceLock::new();
-            CELL.get_or_init(|| Bounds::new(Array1::from_elem(1, -1.0), Array1::from_elem(1, 1.0), 0.0))
+            CELL.get_or_init(|| {
+                Bounds::new(Array1::from_elem(1, -1.0), Array1::from_elem(1, 1.0), 0.0)
+            })
         }
         fn eval(&self, _x: ArrayView1<f64>) -> f64 {
             panic!("split eval must not run when value_and_gradient is fused")

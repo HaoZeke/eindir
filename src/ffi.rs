@@ -293,7 +293,8 @@ fn descriptor_string_equal(left: *const c_char, right: *const c_char) -> bool {
 }
 
 fn required_string_matches(actual: *const c_char, required: *const c_char) -> bool {
-    required.is_null() || unsafe { CStr::from_ptr(required).to_bytes().is_empty() }
+    required.is_null()
+        || unsafe { CStr::from_ptr(required).to_bytes().is_empty() }
         || descriptor_string_equal(actual, required)
 }
 
@@ -828,8 +829,7 @@ mod tests {
             energy_unit: energy.as_ptr().cast(),
             energy_sign: 1,
             gradient_sign: 1,
-            operations: EINDIR_OBJECTIVE_OPERATION_ENERGY
-                | EINDIR_OBJECTIVE_OPERATION_FORCES,
+            operations: EINDIR_OBJECTIVE_OPERATION_ENERGY | EINDIR_OBJECTIVE_OPERATION_FORCES,
             tensor_device_type: EINDIR_TENSOR_DEVICE_CPU,
             tensor_dtype_code: EINDIR_TENSOR_DTYPE_FLOAT,
             tensor_dtype_bits: 64,
