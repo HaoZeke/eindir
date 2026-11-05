@@ -5,11 +5,11 @@
 //! gradients, surrogates, point sets, and builtin objective implementations)
 //! consumed by `anneal-core`.
 
+/// Separable rank-1 surrogate and its tempered independence sampler.
+pub mod additive;
 /// Forward-mode automatic differentiation via `num-dual`.
 #[cfg(feature = "autodiff")]
 pub mod autodiff;
-/// Separable rank-1 surrogate and its tempered independence sampler.
-pub mod additive;
 /// Box bounds on N-dimensional points.
 pub mod bounds;
 /// Error types shared by all fallible operations in `eindir-core`.
@@ -45,9 +45,9 @@ pub mod reduced;
 /// Shared algebra-facing type definitions.
 pub mod types;
 
+pub use additive::AdditiveSurrogate;
 #[cfg(feature = "autodiff")]
 pub use autodiff::{DualField, ForwardAd};
-pub use additive::AdditiveSurrogate;
 pub use bounds::Bounds;
 pub use error::Error;
 pub use features::{BoxGeometry, box_geometry, compensated_delta, isotropic_proposal_scale};

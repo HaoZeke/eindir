@@ -1,0 +1,1729 @@
+# eindir
+
+> eindir is a Rust crate, eindir-core, with Python, C and C++ bindings. It has the primitives for bounded optimisation and sampling on R^D: the Objective trait, box bounds, Halton point sets, gradients, a GLE coloured-noise thermostat and surrogate models. The anneal optimiser is built on it.
+
+Each link points at the Org source of a page under `docs/orgmode/` on GitHub. The site, https://eindir.rgoswami.me/, is built from the same sources by Sphinx, and `llms-full.txt` has every page as Markdown in one file.
+
+Five pages of the site have Python examples that stop with ImportError. They are the Quickstart page and the Python quickstart, low-discrepancy, GLE and surrogate tutorials. The Python package is narrower than the Rust crate. `eindir` exports `NumLimit`, `FPair`, `ObjectiveFunction`, `OutOfBounds`, `low_discrepancy_points`, `styblinski_tang` and array API, DLPack and TVM-FFI helpers, and `eindir._core` adds `Bounds`, `PyObjective` and `shifted_low_discrepancy_points`. `GleThermostat`, `optimal_sampling_drift`, `matrix_exp`, `ldl_sqrt`, `halton_unit`, the surrogates, the gradient adapters and the builtin objective types are Rust-only. The `eindir-python` skill shows the calls that work.
+
+That skill and the three others under `skills/` give worked examples of common tasks, with scripts that CI runs. `AGENTS.md` has the build, test and documentation commands and the mistakes that are easy to make. Both are reproduced at the end of `llms-full.txt`.
+
+The pages follow in the order of the site's navigation, converted from Org to Markdown. The Rust API reference that Sphinx generates from the doc comments in `src/` is not included, so read the sources or run `cargo doc --open`.
+
+## Overview
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/index.org
+
+**eindir Documentation**
+
+![eindir](/_static/eindir_logo.png)
+
+### Overview
+
+`eindir` ships typed primitives for ND objective functions and bounded sampling.
+It provides the `Objective` trait (and Python/C/C++ bindings), low-discrepancy point sets, bounds handling, a GLE coloured-noise thermostat with optimal-sampling drift, and surrogate infrastructure (Additive/Chebyshev/Reduced objectives).
+The Python surface is the familiar legacy API; the Rust `eindir-core` crate (with pyo3 + cbindgen) powers everything and is consumed by `anneal` for the five-component algebra.
+
+Every primitive is designed for reuse: the same `Objective` and low-discrepancy facilities feed GLE, surrogates, QMC polish, and the anneal drivers without duplication.
+Use `eindir` directly when the task is to define an objective, generate bounded point sets, expose gradients across language boundaries, or build proposal machinery that should remain independent of a particular optimiser.
+
+### Key Features
+
+- **Objective trait + bindings**: ND f: R^D -> R with bounds, gradients (optional), and Python (pyo3 + array-api), C, C++ surfaces.
+Builtin test objectives (Rastrigin, Rosenbrock, Styblinski-Tang, Ackley).
+- **Low-discrepancy & halton**: Bounded QMC point sets (Halton-based) for initialisation, pilots, polish, and surrogates.
+The same deterministic sequence can seed starts, fit surrogates, or feed an optimiser, so benchmark campaigns do not mix sampling changes with algorithm changes.
+- **GLE thermostat**: Coloured-noise generalised Langevin (Ceriotti-Bussi-Parrinello) with optimal-sampling drift matrix.
+BAB integrator, stationary reseed, exact small-matrix exp + LDL^T sqrt.
+The drift and covariance machinery provide reusable coloured-noise moves for objectives whose curvature spans separated time scales.
+- **Surrogates**: Additive (rank-1 separable Chebyshev) and total-degree Chebyshev surrogates, ReducedObjective (active subspace + surrogate).
+These give downstream optimisers cheap structure without replacing the authoritative objective.
+- **Python / C / C++ ABI**: Mixed maturin layout for Python, cargo-c for C, hand-written C++ header.
+Full interop with array API, DLPack, TVM-FFI in downstream (anneal).
+- **Reuse with anneal**: The same primitives power the typed SA algebra, Bayesian pilot/mixer, GLE-Langevin driver, QMC polish, device/ensemble backends, and surrogate independence proposals.
+
+See the [architecture](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/architecture.org) page for the crate layout and the [primitives](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/explanation/primitives.org) explanation for the trait design.
+The IISE manuscript (HaoZeke/anneal) shows how these feed the five-component algebra.
+
+### What to Read First
+
+- [Quickstart](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/quickstart.org) shows the smallest objective and bounded sampling workflow.
+- [Using with anneal](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/howto/using-with-anneal.org) explains the division between primitives and search drivers.
+- [Gradients](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/howto/gradients.org) covers the optional derivative path used by GLE and local polish.
+- [API primitives](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/reference/api-primitives.org) names the stable concepts.
+- The generated Rust API starts at [Rust API Reference](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/reference/rust-api.org) and follows the `eindir-core` crate modules.
+
+### Background
+
+`eindir` is the primitives layer of the simmAnneal stack.
+The companion package `anneal` consumes the `Objective` trait and ships the typed component algebra for simulated annealing (Obj/Cool/Neigh/Move/Accept + L1-L4 laws).
+
+This crate hosts the core traits and helpers (Objective, low_disc, GLE, surrogates) plus the Python/C/C++ bindings.
+The IISE manuscript at HaoZeke/anneal defines the algebra that sits on top; the primitives here are deliberately reusable so the same low-discrepancy design, GLE drift, or surrogate can serve classical SA, HMC, polish, device backends, and surrogate proposals without reimplementation.
+
+## Quickstart
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/quickstart.org
+
+This page walks through the main primitives with minimal runnable examples.
+
+### Installation
+
+#### Python (pip)
+
+```bash
+pip install eindir
+```
+
+#### Pixi (development)
+
+```bash
+pixi install
+pixi run -e python python-test
+```
+
+### Hello eindir (Objective + low-discrepancy)
+
+```python
+import numpy as np
+from eindir import low_discrepancy_points, Bounds
+
+# Define a simple bounded objective (Rastrigin in 2D)
+low = np.array([-5.12, -5.12])
+high = np.array([5.12, 5.12])
+bounds = Bounds(low, high, 0.0)  # dummy for example; real use supplies eval
+
+# Low-discrepancy starts (Halton-based, reproducible)
+starts = low_discrepancy_points(low, high, 4, skip=1)
+print("Starts shape:", starts.shape)
+print(starts)
+```
+
+See the tutorials for full Objective trait usage, GLE, and surrogates.
+
+### GLE thermostat (standalone)
+
+```python
+from eindir import GleThermostat, optimal_sampling_drift
+import numpy as np
+
+drift = optimal_sampling_drift(omega0=0.2)
+gle = GleThermostat.canonical(drift, dt=0.01, temperature=1.0, mass=1.0)
+# Use with your own BAB loop or via anneal.gle_langevin
+print("GLE thermostat ready, ns auxiliary momenta:", drift.shape[0]-1)
+```
+
+### Next steps
+
+- [tutorials/quickstart](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/tutorials/quickstart.org) for a full Python Objective example.
+- [GLE thermostat tutorial](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/tutorials/gle-thermostat.org).
+- [Surrogates tutorial](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/tutorials/surrogates.org) (additive rank-1 + Chebyshev).
+- [Using with anneal](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/howto/using-with-anneal.org) for the five-component algebra.
+
+## Tutorials
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/tutorials.org
+
+### Install
+
+#### Python (pip)
+
+```bash
+pip install eindir
+```
+
+#### Pixi (development)
+
+```bash
+pixi install
+pixi run -e python python-test
+```
+
+#### From source (cargo)
+
+```bash
+cargo build --release
+cargo cinstall --release --prefix /usr/local
+```
+
+### Hello eindir
+
+```python
+import eindir
+print(eindir._core.__version__)
+```
+
+### Bounds and FPair
+
+The `FPair` and `NumLimit` primitives expose bounds and objective metadata for Python callers.
+The Rust crate also exports typed bounds, objective, gradient, surrogate, and GLE thermostat primitives consumed by `anneal`.
+
+```python
+import numpy as np
+from eindir.core.components import NumLimit
+b = NumLimit(low=np.array([-1., -1.]), high=np.array([1., 1.]), dims=2)
+print(b.mkpoint())
+```
+
+## Quickstart with Python
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/tutorials/quickstart.org
+
+This tutorial shows the core workflow: define or wrap an objective, generate
+low-discrepancy starts, and evaluate. All primitives are the same ones
+consumed by =anneal=.
+
+### Prerequisites
+
+```bash
+pip install "eindir[all]"
+```
+
+### Step 1: Define a Python objective (or use builtin)
+
+```python
+import numpy as np
+from eindir import Objective, Bounds, low_discrepancy_points
+
+class Rastrigin2D(Objective):
+    def __init__(self):
+        low = np.full(2, -5.12)
+        high = np.full(2, 5.12)
+        super().__init__(Bounds(low, high, 0.0))
+
+    def eval(self, x):
+        x = np.asarray(x, dtype=np.float64)
+        return float(10.0 * len(x) + np.sum(x**2 - 10.0 * np.cos(2.0 * np.pi * x)))
+
+obj = Rastrigin2D()
+```
+
+### Step 2: Low-discrepancy initialisation
+
+```python
+starts = low_discrepancy_points(obj.bounds.low, obj.bounds.high, 8, skip=1)
+print("8 starts:\n", starts)
+
+vals = [obj.eval(s) for s in starts]
+print("Values at starts:", vals)
+```
+
+### Step 3: Use with GLE or surrogates (see other tutorials)
+
+The same `obj` (or any class implementing the `Objective` protocol) can be passed to `anneal.gle_langevin`, surrogate fitting, QMC polish, etc.
+
+See:
+- [GLE thermostat tutorial](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/tutorials/gle-thermostat.org)
+- [Surrogates tutorial](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/tutorials/surrogates.org)
+- [Using with anneal](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/howto/using-with-anneal.org) for the typed SA algebra.
+
+## Low-discrepancy points & sampling
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/tutorials/low-discrepancy.org
+
+=eindir= provides reproducible bounded low-discrepancy (Halton-based) point
+sets used for pilots, initialisation, QMC polish, and surrogate fitting
+across the simmAnneal stack.
+
+### API
+
+- `low_discrepancy_points(low, high, n, skip=1)`
+- `halton_unit(skip, dim)` (unit hypercube)
+
+### Example: 2D starts for a bound-constrained problem
+
+```python
+import numpy as np
+from eindir import low_discrepancy_points, Bounds
+
+low = np.array([-5.12, -5.12])
+high = np.array([5.12, 5.12])
+starts = low_discrepancy_points(low, high, 16, skip=42)
+print(starts.shape)  # (16, 2)
+print("First 3:", starts[:3])
+```
+
+### Why it matters
+
+Low-discrepancy starts give better coverage than random for the same N, especially useful for Bayesian pilots, surrogate fitting, and QMC polish.
+The skip/seed controls reproducibility across runs and languages.
+
+See also [using with anneal](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/howto/using-with-anneal.org) (QMC starts for the mixer, polish, etc.).
+
+## GLE coloured-noise thermostat
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/tutorials/gle-thermostat.org
+
+White-noise Langevin critically damps only one frequency. For ill-conditioned
+objectives (wide spread of Hessian eigenvalues) most modes are far from
+critical and decorrelate slowly.
+
+The GLE (Ceriotti-Bussi-Parrinello form) replaces white noise with coloured
+noise generated from auxiliary momenta whose drift matrix shapes a
+frequency-dependent friction. A well-chosen drift (optimal-sampling) makes
+efficiency nearly flat across a target band.
+
+### API (from eindir)
+
+```python
+from eindir import GleThermostat, optimal_sampling_drift, matrix_exp, ldl_sqrt
+import numpy as np
+
+drift = optimal_sampling_drift(omega0=0.2)   # covers [omega0, 100*omega0]
+gle = GleThermostat.canonical(drift, dt=0.01, temperature=1.0, mass=1.0)
+
+# Stationary sample for auxiliary state (ns+1, dim)
+ns = drift.shape[0] - 1
+c = np.eye(ns+1) * 1.0   # temperature-scaled covariance
+s = gle.sample_stationary(c, dim=2, mass=1.0)  # (ns+1, 2)
+```
+
+### Usage patterns
+
+- Standalone thermostat in custom integrators.
+- Via `anneal.gle_langevin` (full annealing driver, epoch-wise temperature, gradient-driven BAB + GLE).
+- The same drift matrix is reusable; correctness is set by the covariance C, acceleration by the drift A (a-la-carte decoupling).
+
+See the source comments in `eindir/src/gle.rs` and `anneal/src/methods/gle_langevin.rs` for the BAB propagator, matrix_exp (Taylor + scaling-squaring), and ldl_sqrt (stabilized for small dt).
+
+### Tie-in to anneal
+
+The GLE driver occupies the `Move` slot of the five-component algebra.
+One fitted drift therefore accelerates every gradient-capable driver (plain SA, HMC, Bayesian mixer, ...) with no per-driver code.
+
+## Surrogates (additive, Chebyshev, reduced)
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/tutorials/surrogates.org
+
+### Surrogates (additive, Chebyshev, reduced)
+
+Surrogates give cheap values (and sometimes gradients) for pilots, dimension collapse, and independence proposals while the true objective is only evaluated for acceptance or the reported best.
+
+### Additive (rank-1) surrogate
+
+Fits a separable model c + sum_j g_j(x_j) via backfitting on a pilot design.
+For separable objectives the tempered density factorises; one global draw places every coordinate at its own tempered optimum (O(d) cost, no curse of dimensionality).
+Metropolis correction on the true f removes bias.
+
+See `anneal.additive_independence` (uses eindir surrogates under the hood) and the rank-1 independence driver in the IISE manuscript.
+
+### Total-degree Chebyshev + active subspace
+
+ReducedObjective (active subspace from pilot gradient covariance) + total-degree Chebyshev on the reduced box.
+Supplies both cheap value and analytic gradient.
+
+Used for dimension collapse in high-D CUTEst runs and as a cheap Obj for HMC etc.
+
+### API surface (Python)
+
+```python
+from eindir import AdditiveSurrogate, ChebyshevSurrogate, ReducedObjective
+# ... fit on pilot data, then use .eval(x) or pass to anneal drivers
+```
+
+The same fitted surrogate object can be read at the Obj slot (for cheap evals) or the Move slot (as an independence proposal, corrected by Metropolis on the true objective).
+This is the concrete unification payoff.
+
+## Installation
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/howto/install.org
+
+### Python
+
+```bash
+pip install eindir
+```
+
+The extras are `plotter` (matplotlib and cmcrameri) and `testing` (array-api-strict, pytest and pytest-cov), as in `pip install "eindir[plotter]"`.
+
+### Pixi (full stack, recommended for development + docs)
+
+```bash
+pixi install
+```
+
+### From source (Rust + Python)
+
+```bash
+cargo build --release
+cargo cinstall --release --prefix /usr/local   # for C/C++ consumers
+# Python: maturin develop --features python (or pixi run -e python python-build)
+```
+
+## Using with anneal
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/howto/using-with-anneal.org
+
+All `eindir` primitives are designed to be dropped straight into the five typed SA components (Obj, Cool, Neigh, Move, Accept) that `anneal` exposes.
+
+### Objective slot
+
+Any class implementing the `Objective` protocol (or a wrapped Python callable via `PyObjective`) can be used as the `Obj` for Boltzmann, Fast, Gsa, Bayesian mixer, GLE-Langevin, additive independence, QMC polish, HMC, PT, etc.
+
+### Low-discrepancy starts
+
+Use `low_discrepancy_points` (or `halton_unit`) for:
+- Mixer chain initialisation (when bounds known)
+- Bayesian pilot designs
+- QMC / shifted-QMC polish starts
+- Surrogate fitting designs
+
+### GLE Move
+
+The `GleThermostat` + `optimal_sampling_drift` from eindir is exactly what `anneal.gle_langevin` consumes for the coloured-noise Move.
+One fitted drift accelerates every gradient-capable driver.
+
+### Surrogates
+
+- `AdditiveSurrogate` / `ChebyshevSurrogate` / `ReducedObjective` can be read at the Obj slot (cheap evals) or the Move slot (independence proposal
+  - Metropolis correction on the true f).
+- This is how the rank-1 tensor independence driver and the dimension-collapse surrogate in the IISE manuscript achieve their "one fitted object serves multiple slots" property.
+
+See the anneal tutorials (bayesian-pilot-mixer, gle-colored-noise, polish-device-scale, additive independence) for concrete driver-level examples.
+
+## Gradients
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/howto/gradients.org
+
+Many drivers (GLE-Langevin, HMC, some surrogates) benefit from or require gradients.
+
+### Supplying a gradient
+
+- Implement `grad(self, x)` on your Objective subclass (returns ndarray).
+- Or wrap a Python callable + grad callable with the binding helpers.
+- When no gradient is available, finite differences are used (n_p+1 cost per gradient evaluation) and charged against the budget.
+
+See the GLE and HMC tutorials in anneal for end-to-end usage.
+
+## Usage FAQ
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/howto/faq.org
+
+### How do I supply a gradient to GLE / HMC drivers?
+
+Implement `grad` on your Objective (or use `PyObjective` with a gradient callable).
+The GLE and HMC paths in anneal consume it; finite differences are used as fallback (charged as n_p+1 evals).
+
+### Can I use eindir primitives without anneal?
+
+Yes.
+The low-discrepancy, GLE thermostat, surrogates, and Objective trait are standalone and useful for any bounded global optimisation or sampling code.
+
+### What about C/C++ consumers?
+
+cargo-c produces the C ABI + pkg-config.
+The generated header works from both C and C++; the hand-written C++ header adds helpers in `namespace eindir`.
+See `include/eindir-core.hpp` and the bindings page.
+
+## Project FAQ
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/faq.org
+
+### What license is eindir under?
+
+MIT.
+See `LICENSE` in the repository root.
+
+### How do I cite eindir?
+
+See `CITATION.cff` in the repository root, or use the Zenodo DOI badge in the README.
+
+## Architecture
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/architecture.org
+
+### Layout
+
+```text
+eindir/
+  Cargo.toml          Rust crate (lib + cdylib + staticlib)
+  src/                Rust source
+  include/            hand-written C++ companion header
+  python/eindir/      Python package (mixed maturin layout)
+  pytest/             pytest suite
+  docs/               this documentation
+```
+
+### Crate types
+
+The Rust crate produces three artefacts:
+
+- `rlib` for downstream Rust consumers
+- `cdylib` for Python (`pyo3`) and C dynamic loading
+- `staticlib` for C/C++ static linking
+
+### Bindings
+
+- **Python.** `eindir._core` is the Rust extension, and the user-facing package `eindir` re-exports both Rust types and pure-Python helpers from a mixed-mode maturin layout.
+- **C.** `cargo-c` produces `eindir-core.h` and `libeindir_core.{a,so}` with `pkg-config` integration via `eindir-core.pc`.
+- **C++.**
+  The generated `eindir-core.h` is usable directly from C++, and the hand-written `include/eindir-core.hpp` adds helpers in `namespace eindir`.
+
+## The Primitives (traits & design)
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/explanation/primitives.org
+
+### Objective
+
+The central abstraction: a callable with bounds, optional gradient, and a protocol that both Rust and Python sides understand.
+Everything else (low-disc, GLE, surrogates, anneal drivers) is built to consume or produce Objectives.
+
+### Low-discrepancy
+
+Reproducible, well-spaced designs that avoid the clustering of random samples.
+Used for everything from mixer initialisation to surrogate pilots.
+
+### GLE
+
+Coloured noise via auxiliary momenta + drift matrix.
+The optimal-sampling construction (from the same primitives) gives a drift that flattens efficiency; the user only chooses the band (omega0) and timestep.
+
+### Surrogates
+
+Cheap stand-ins that can be promoted to first-class citizens (Obj or Move slot) because the true objective is still used for the acceptance decision or the reported answer.
+This is the unification that lets one fitted model serve evaluation, proposal, and (via tempering) cooling.
+
+## GLE Mechanics
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/explanation/gle.org
+
+### What eindir Builds
+
+The generalized Langevin equation (GLE) thermostat in `eindir` is a small linear stochastic system attached to each physical momentum.
+Instead of damping momentum with one scalar friction, it augments the state with auxiliary momenta.
+The augmented vector evolves under a drift matrix `A` and a noise covariance chosen so that the stationary covariance is the desired thermal covariance.
+
+For a physical momentum `p` and auxiliary coordinates `s`, the thermostat acts on the stacked state `(p, s)`.
+The `GleThermostat` type stores the drift, timestep, temperature, and mass scaling needed by the BAB propagator used downstream in `anneal`.
+The supporting routines in `src/gle.rs` provide:
+
+- `matrix_exp` for the small dense propagator, using Taylor expansion with scaling and squaring.
+- `ldl_sqrt` for a stable square root of the stationary covariance.
+- `sample_stationary` for drawing an initial extended momentum state from the invariant Gaussian.
+- `optimal_sampling_drift` for a fitted Ceriotti-Bussi-Parrinello optimal-sampling drift over a target frequency band.
+
+### Correctness and Acceleration
+
+The important separation is between the covariance condition and the shape of the drift.
+The covariance fixes the invariant Boltzmann momentum distribution.
+The drift controls how quickly different local frequencies decorrelate.
+
+White-noise Langevin uses one friction scale, so it can only be close to critically damped near one frequency.
+The fitted GLE drift spreads friction across a band by coupling several damped oscillator pairs to the physical momentum.
+That makes the thermostat a better `Move` primitive for ill-conditioned objectives, while the Metropolis or trajectory-level accounting in `anneal` still evaluates the true objective.
+
+### Interface to anneal
+
+`anneal` consumes this machinery in its `gle_langevin` driver and in the paper's five-component algebra as a gradient-aware `Move` slot.
+The driver asks `eindir` for the drift matrix, builds the canonical thermostat, reseeds the auxiliary state from the stationary covariance, and advances the physical position with a BAB-style step.
+Objective values and accepted states remain owned by `anneal`; `eindir` supplies the reusable thermostat primitive.
+
+This division matters for the implementation.
+The same drift and covariance code can be used by the standalone GLE tutorial, by anneal's simulated-annealing driver, and by benchmark scripts that compare white-noise and colored-noise sampling.
+No driver needs a private copy of the matrix exponential, covariance square root, or fitted drift constants.
+
+## Surrogate Mechanics
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/explanation/surrogates.org
+
+### Surrogate Mechanics
+
+The additive surrogate is a rank-1 functional tensor train.
+Its tempered density factorises, enabling O(d) independence sampling.
+The Metropolis correction on the true objective removes the mean-field bias while preserving the "one fitted object, multiple slots" property.
+
+## Specification
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/spec.org
+
+The crate exposes typed objective, bounds, gradient, surrogate, and GLE thermostat primitives used by `anneal` and by the Python extension.
+
+## Rust API Reference
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/reference/rust-api.org
+
+### Rust API Reference
+
+The `eindir-core` crate provides the Objective trait, bound handling, low-discrepancy generators, coloured-noise GLE thermostat machinery, surrogate models, reduced objectives, and the Rust surfaces behind the Python and C bindings.
+
+The API documentation below is generated from the crate source through `sphinxcontrib_rust` and `sphinx-rustdoc-postprocess`, then linked into this site under the same reference tree as the user-facing primitive summaries.
+
+See also:
+
+- [API Primitives](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/reference/api-primitives.org) for the stable Python-facing
+  concept list.
+- [Primitives](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/explanation/primitives.org) for the design-level explanation.
+- [anneal documentation](https://anneal.rgoswami.me/) for the
+  simulated-annealing drivers built on these primitives.
+
+## Glossary
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/reference/glossary.org
+
+### Glossary
+
+- **`Objective`**: Trait (and Python/C/C++ surface) for f: R^D -> R with bounds.
+- **`low_discrepancy_points`**: Bounded Halton-style QMC design.
+- **`GLE`**: Generalised Langevin equation coloured-noise thermostat (Ceriotti-Bussi-Parrinello).
+- **`AdditiveSurrogate`**: Rank-1 separable Chebyshev surrogate (c + sum g_j(x_j)).
+- **`ReducedObjective`**: Active-subspace + surrogate wrapper for dimension collapse.
+- **`optimal_sampling_drift`**: Drift matrix that flattens GLE efficiency across a frequency band.
+
+## API Primitives (Python)
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/reference/api-primitives.org
+
+### API Primitives (Python)
+
+See the Python package `eindir` (re-exports from `eindir._core` plus pure-Python helpers) and the Rust docs (via sphinxcontrib_rust in this Sphinx build).
+
+Core symbols: `Objective`, `Bounds`, `low_discrepancy_points`, `halton_unit`, `GleThermostat`, `optimal_sampling_drift`, `AdditiveSurrogate`, `ChebyshevSurrogate`, `ReducedObjective`, and the various builtin objectives.
+
+## Bindings
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/bindings.org
+
+### Python (maturin)
+
+The Python package `eindir` ships from PyPI as a maturin-built wheel.
+The Rust extension is exposed as the submodule `eindir._core`.
+The package source lives at `python/eindir/` in the repo and is installed via `maturin develop --features python` during development.
+
+### C and C++ (cargo-c)
+
+The Rust crate produces a `cdylib`, `staticlib`, generated header `eindir-core.h`, and pkg-config metadata `eindir-core.pc` via cargo-c.
+
+```bash
+cargo cinstall --release --prefix /usr/local
+pkg-config --cflags --libs eindir-core
+```
+
+The generated header is plain C with global declarations and compiles as both C and C++ against DLPack 1.0 headers.
+Tensor arguments use `struct DLManagedTensorVersioned` as declared by `dlpack/dlpack.h`.
+A hand-written companion header `eindir-core.hpp` adds C++ helpers in `namespace eindir`.
+
+### Build-system glue
+
+#### Meson
+
+```meson
+eindir_core_dep = dependency('eindir-core')
+executable('myprog', 'main.cpp', dependencies: eindir_core_dep)
+```
+
+#### CMake
+
+```cmake
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(EINDIR_CORE REQUIRED IMPORTED_TARGET eindir-core)
+target_link_libraries(myprog PRIVATE PkgConfig::EINDIR_CORE)
+```
+
+## Contributing
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/contributing.org
+
+### Setup
+
+```bash
+git clone https://github.com/HaoZeke/eindir
+cd eindir
+pixi install
+pixi run -e python python-test
+```
+
+### Conventional Commits
+
+Commit messages follow the Conventional Commits convention (enforced by cog in CI via cocogitto).
+Use the standard prefixes:
+
+- `feat:`  new functionality
+- `fix:`   bug fix
+- `docs:`  documentation only
+- `refactor:` behaviour-preserving code change
+- `chore:` tooling, build, dependency updates
+- `ci:`    CI configuration
+
+### Changelog (towncrier)
+
+Changelog is assembled with towncrier from news fragments (not cog).
+For any user-visible or breaking change, add a fragment under `docs/newsfragments/` before merging the PR:
+
+- Name: `+short-desc.type.rst` (or `123.type.rst` for PR #) where type is one of: added, changed, removed, fixed, deprecated, security, dev, misc.
+- Content: one or more lines describing the change (towncrier adds the bullet and wires the issue link from filename when numeric).
+
+Preview/build locally (requires the uv feature or uv on PATH):
+
+```bash
+pixi r towncrier-draft   # preview, no write
+pixi r towncrier-build   # write to CHANGELOG.md and consume fragments
+```
+
+Run the build step as part of preparing a release tag, after the version bump described below.
+Fragments are required for changes that should appear in release notes.
+
+### Versioning
+
+The `version` field in `Cargo.toml` is the only place the release version is written by hand.
+Everything else derives from it:
+
+- `Cargo.lock` is updated by cargo.
+- `pyproject.toml` declares `dynamic = ["version"]`, so maturin reads `Cargo.toml`.
+- `eindir_core_version()` in the C API and `eindir._core.__version__` use the crate version at compile time.
+- `meson.build`, `CMakeLists.txt`, `pixi.toml` and `towncrier.toml` carry generated copies between cogapp markers that import `tools/cargo_version.py`.
+
+To bump the version, edit `Cargo.toml`, then regenerate the copies and the lock file:
+
+```bash
+python3 -m pip install cogapp
+tools/sync-version.sh
+cargo update --workspace
+```
+
+The scripts call cogapp as `python3 -m cogapp` because `cog` on `PATH` may be cocogitto, which checks commit messages.
+Do not edit the lines between `[[[cog` and `[[[end]]]` by hand.
+
+CI runs `tools/check-version-drift.sh`, which reruns cogapp in `--check` mode and checks `Cargo.lock` with `cargo metadata --locked`.
+It fails on any copy that disagrees with `Cargo.toml`.
+It also runs `tools/check_changelog_links.py`, which requires every `CHANGELOG.md` heading to link to its `v`-prefixed tag (`v0.7.0` and so on).
+After tagging, `python3 tools/check_changelog_links.py --remote origin` confirms that every linked tag exists.
+Run it locally before pushing a bump.
+
+### Style
+
+Rust code is formatted with `cargo fmt` and linted with `cargo clippy --all-features -- -D warnings`.
+Python code follows `ruff`.
+
+### Tests
+
+Rust tests live under `tests/` and in the modules under `src/`, and Python tests under `pytest/`.
+CI runs both on Linux and macOS with Python 3.10 to 3.13, building the package with pip and maturin (`.github/workflows/ci.yml`).
+
+## Best Practices
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/dev/best_practices.org
+
+### Reuse the same Objective
+
+Define (or wrap) your f once.
+Pass the identical object to pilots, mixer, GLE, surrogates, polish, and anneal drivers.
+This is the source of the "one change serves all" property.
+
+### Prefer QMC starts when bounds are known
+
+`low_discrepancy_points` (with a stable skip) gives better coverage and reproducibility than random for the same budget.
+Use it for mixer chains, pilots, and polish.
+
+### GLE drift is reusable
+
+Fit (or use the default optimal-sampling) drift once; the same matrix can be used at any temperature / with any driver that accepts a GLE Move.
+Correctness is controlled by the covariance C you pass to sample_stationary; acceleration by the drift A.
+
+### Surrogates as first-class citizens
+
+An additive or Chebyshev surrogate can be treated as an Obj (cheap value) or as a Move (independence proposal).
+The Metropolis correction reports the best value against the true objective.
+Charge the pilot cost to the budget; the collapse never enters the accuracy accounting.
+
+### Python array API + DLPack
+
+When using device backends (via anneal), keep everything in the namespace supplied by the bounds array.
+Pass DLPack tensors for zero-copy handoff to other runtimes.
+
+### Test with the laws checker (when using via anneal)
+
+The `SaVariant` / `checked_with_sweep` in anneal will catch neighbourhood or acceptance-law violations early.
+Write your custom Obj/Neigh/Move/Accept so they satisfy L1-L4; the primitives here are already designed to do so.
+
+## Changelog
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/CHANGELOG.md
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+### [0.7.0](https://github.com/HaoZeke/eindir/tree/v0.7.0) - 2026-11-02
+
+#### Added
+
+- C API objective descriptors: `eindir_objective_descriptor()` reports
+  the semantic objective contract, and
+  `eindir_objective_descriptor_compatible()` checks it, with zero and
+  empty fields as wildcards.
+
+#### Developer
+
+- The `version` field in `Cargo.toml` is the only hand-written copy of
+  the release version. `pyproject.toml` reads it through maturin, and
+  `meson.build`, `CMakeLists.txt`, `pixi.toml` and `towncrier.toml` hold
+  cogapp-generated copies refreshed by `tools/sync-version.sh`.
+- CI runs `tools/check-version-drift.sh`, which reruns cogapp in
+  `--check` mode, checks `Cargo.lock` and validates the changelog tag
+  links, failing on any drift.
+- Changelog headings link to the `v`-prefixed release tags.
+
+#### Changed
+
+- `eindir_core_abi_stamp()` reports objective layout 3 for the new
+  tensor fields.
+- The meson and CMake projects report the crate version (previously a
+  stale 0.5.0), and the meson pkg-config file drops its `_meson` version
+  suffix.
+
+#### Fixed
+
+- The generated `eindir-core.h` is valid C again: cbindgen no longer wraps
+  it in a C++ namespace, and tensor arguments use the DLPack
+  `struct DLManagedTensorVersioned` tag so C and C++ consumers can include
+  it.
+
+### [0.6.0](https://github.com/HaoZeke/eindir/tree/v0.6.0) - 2026-09-13
+
+#### Added
+
+- Optional `autodiff` feature: `ForwardAd` wraps a `DualField` written
+  once over `num-dual` and supplies an exact fused gradient.
+
+#### Fixed
+
+- Drop the blanket `DifferentiableObjective` impl so a type can override
+  `value_and_gradient` for a fused `(f, grad)` evaluation. Builtins now
+  carry an explicit empty impl; downstream crates must do the same.
+
+### [0.5.2](https://github.com/HaoZeke/eindir/tree/v0.5.2) - 2026-07-18
+
+#### Added
+
+- Parallel `eval_batch` and Halton design generation via Rayon, with a
+  multi-walker `eval_batch` path sized for population algorithms.
+
+#### Fixed
+
+- Documented and hardened the C API FFI contracts (null handling, pointer
+  lifetime and length requirements) for the Objective/Gradient surface.
+
+### [0.5.1](https://github.com/HaoZeke/eindir/tree/v0.5.1) - 2026-07-10
+
+#### Added
+
+- `features` module: `box_geometry` / `BoxGeometry` (dimension, mean width, aspect ratio), `isotropic_proposal_scale`, and `compensated_delta` for numerically safer acceptance-path energy differences.
+
+### [0.5.0](https://github.com/HaoZeke/eindir/tree/v0.5.0) - 2026-06-26
+
+#### Added
+
+- Expose the Objective/Gradient contract through the cargo-c C API, with
+  ``eindir_objective_t`` as a ``repr(C)`` first-member embeddable handle for
+  downstream C/C++ consumers.
+
+#### Fixed
+
+- Cache the Halton prime table so high-dimensional low-discrepancy designs no
+  longer stall on repeated prime generation.
+- Correct analytic gradients for the built-in objective functions and split the
+  Python objective-handle feature so optional bindings stay coherent.
+
+#### Miscellaneous
+
+- Refresh Sphinx/orgmode site docs, repair reference navigation, and stabilize
+  the documentation build pipeline.
+- Resolve ``dlpk`` from crates.io (v0.1.5) instead of a git pin, unblocking
+  registry publication of ``eindir-core``.
+
+### [0.4.7](https://github.com/HaoZeke/eindir/tree/v0.4.7) - 2026-06-08
+
+#### Added
+
+- Pointset improvements: shifted low-discrepancy replicas, anchored design centers, and anchored low-discrepancy designs.
+
+#### Fixed
+
+- Additive finite-weight guard, GLE import cleanups, and Array1 test-local fixes.
+
+### [0.4.4](https://github.com/HaoZeke/eindir/tree/v0.4.4) - 2026-06-08
+
+#### Added
+
+- Fitted optimal-sampling GLE drift with a benchmarked colored-noise comparison against white noise.
+
+### [0.4.3](https://github.com/HaoZeke/eindir/tree/v0.4.3) - 2026-06-08
+
+#### Added
+
+- Native GLE colored-noise thermostat with optimal sampling.
+
+### [0.4.2](https://github.com/HaoZeke/eindir/tree/v0.4.2) - 2026-06-07
+
+#### Added
+
+- Separable rank-1 surrogate (Additive) + tempered independence sampler.
+
+### [0.4.1](https://github.com/HaoZeke/eindir/tree/v0.4.1) - 2026-06-07
+
+#### Added
+
+- Bounded low-discrepancy designs (pointset API).
+
+### [0.4.0](https://github.com/HaoZeke/eindir/tree/v0.4.0) - 2026-06-04
+
+#### Added
+
+- ReducedObjective (dimension-collapse via affine encode/decode on retained subspace) and ChebyshevSurrogate (total-degree on reduced box with analytic gradient).
+Both are first-class Objective implementations.
+Also tvm_ffi tensor interop and Array API namespace helpers.
+
+### [0.3.0](https://github.com/HaoZeke/eindir/tree/v0.3.0) - 2026-04-26
+
+#### Added
+
+- Objective trait with built-in Ackley, Rastrigin, Rosenbrock, Styblinski-Tang; FPair and Bounds types with proptest law witnesses.
+- PyObjective adapter wrapping Python callables into the Objective<f64> algebra.
+
+### [0.2.0](https://github.com/HaoZeke/eindir/tree/v0.2.0) - 2026-04-25
+
+#### Added
+
+- Pixi workspace with default, python, and docs environments (replacing environment.yml and PDM).
+- Replaced legacy MyST + furo docs with orgmode export + Sphinx (shibuya theme) pipeline.
+- Scaffolded eindir-core Rust crate (lib + cdylib + staticlib) plus C/C++ bindings via cargo-c, pkg-config, meson, CMake.
+
+#### Changed
+
+- Adopted cog for conventional commits + cargo-dist style releases; dropped legacy pre-commit and tbump.
+- BREAKING: build system migrated from PDM to maturin mixed mode.
+Python sources moved under python/eindir/; wheel ships Rust extension eindir._core.
+
+### [0.1.0](https://github.com/HaoZeke/eindir/tree/v0.1.0) - 17-02-2024
+
+No significant changes.
+
+### [0.0.5](https://github.com/HaoZeke/eindir/tree/v0.0.5) - 17-02-2024
+
+No significant changes.
+
+## Code of Conduct
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/code_of_conduct.org
+
+### Code of Conduct
+
+The `eindir` project adopts the [Contributor Covenant](https://www.contributor-covenant.org/version/2/1/code_of_conduct/) (v2.1).
+
+### Our Pledge
+
+Project spaces should remain open, respectful, and focused on the work.
+Participation is welcome across backgrounds, identities, experience levels, and technical domains.
+
+### Standards
+
+Helpful participation includes reproducible reports, concrete examples, constructive review, and patience with users and maintainers.
+Unacceptable conduct includes harassment, personal attacks, publication of private information, or sustained disruption of technical discussion.
+
+### Enforcement
+
+Maintainers may clarify expectations, moderate discussions, or restrict participation when conduct makes project work harder for other contributors.
+
+## AGENTS.md
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/AGENTS.md
+
+Working notes for changing or scripting against eindir.
+The manual lives in `docs/orgmode/`.
+`llms.txt` indexes it, and `llms-full.txt` has all of it in one file, with this file and the skills.
+Task guides with scripts that CI runs are under `skills/`.
+
+### What eindir provides
+
+`eindir-core` is a Rust crate (library name `eindir_core`) of primitives for optimisation and sampling within box bounds on R^D.
+The anneal optimiser is built on it.
+
+- Objectives within box bounds: `Objective<T>` over `Bounds<T>`, with `eval`, `eval_batch`, and `eval_batch_parallel`, which uses rayon from `EVAL_BATCH_PARALLEL_MIN` points up.
+- Halton point sets: `low_discrepancy_points`, `shifted_low_discrepancy_points`, `boundary_anchored_low_discrepancy_points`, `halton_points`, `halton_unit`.
+- Gradients: the `Gradient<T>` trait, `AnalyticGradient`, `FiniteDiffGradient`, `DifferentiableObjective` and, with the `autodiff` feature, `ForwardAd`.
+- A thermostat for the generalized Langevin equation (GLE): `GleThermostat`, `optimal_sampling_drift`, `matrix_exp`, `ldl_sqrt`.
+- Surrogates: `AdditiveSurrogate`, `ChebyshevSurrogate`, `ReducedObjective`.
+- Test functions: `Rastrigin`, `Rosenbrock`, `Ackley`, `StybTang2D`.
+
+Bindings:
+
+- Python: the `eindir` package, with the extension module `eindir._core`.
+  It covers much less than the crate, and the pitfalls below say what it lacks.
+- C: `libeindir_core` and `eindir-core.h`, built with the `capi` feature.
+  C++ uses the same header, plus `include/eindir-core.hpp`.
+
+### Layout
+
+- `Cargo.toml`: the crate, its feature flags and the only hand-written version.
+- `src/`: the Rust sources, with the C ABI in `ffi.rs` and the `_core` extension in `python.rs` and `py_objective.rs`.
+- `python/eindir/`: the pure-Python package (`NumLimit`, `ObjectiveFunction`, array API helpers, `viz`).
+- `pytest/`: the pytest suite.
+- `tests/`: Rust integration tests, `ffi_smoke.c`, `header_check.c` and `header_check.cpp`.
+- `include/`: `eindir-core.hpp`.
+- `examples/`: `batch_scale.rs`, which times `eval_batch_parallel` against the thread count.
+- `cbindgen.toml`, `meson.build`, `CMakeLists.txt`: header generation and glue for C and C++ consumers.
+- `docs/orgmode/`: the manual sources in Org, with the Sphinx settings in `docs/source/conf.py`.
+- `docs/newsfragments/`: towncrier fragments for the next release.
+- `tools/`: version sync and drift checks.
+- `skills/`: task guides, each a `SKILL.md` with `scripts/` and `assets/`.
+- `scripts/`: `llms/` writes `llms.txt`, and `skills/` checks and runs the guides.
+
+### Toolchain
+
+- Rust 1.88 or newer (edition 2024).
+  An older cargo stops at the manifest with "feature `edition2024` is required", and so do maturin, cbindgen and the version check, which goes through `cargo metadata`.
+  Install a current stable, or prefix single commands with `RUSTUP_TOOLCHAIN=stable`.
+- Python 3.10 or newer.
+  The wheel is abi3 (`cp310`), and building it needs maturin 1.5 or newer, below 2.
+- For C: cargo-c 0.10.17 or newer, DLPack 1.0 headers and a C99 compiler.
+- [pixi](https://pixi.sh) supplies Rust, Python, maturin and the docs tools.
+  Its environments are `default`, `python` and `docs`.
+
+### Build
+
+```bash
+cargo build --release                    # Rust library; no C symbols
+cargo build --release --features capi    # the same with the C ABI
+maturin develop --features python        # eindir and eindir._core into the active virtualenv
+cargo cinstall --release --prefix="$PREFIX" --libdir=lib   # C header, libraries, eindir-core.pc
+```
+
+### Test
+
+`.github/workflows/ci.yml` runs these commands.
+
+```bash
+cargo fmt --all -- --check
+cargo clippy --all-features --all-targets -- -D warnings
+cargo test
+cargo test --all-features
+python -m pip install "maturin>=1.5,<2" pytest numpy
+maturin develop --features python && pytest pytest/
+tools/check-version-drift.sh             # needs cogapp: python3 -m pip install cogapp==3.6.0
+```
+
+At commit 8613085, `cargo test` passes 41 tests and `cargo test --all-features` 54.
+Pytest passes 18 and skips one unless `array-api-strict` is installed.
+The `ffi-smoke` job installs the C library with cargo-c and runs `tests/ffi_smoke.c` under valgrind.
+The C ABI skill script does the same for its examples.
+
+`.github/workflows/skills.yml` runs these.
+
+```bash
+python scripts/llms/build_llms.py --check                     # llms.txt and llms-full.txt are current
+python -m unittest discover -s scripts/llms -p "test_*.py"     # the generator
+python scripts/skills/run_skills.py                           # every SKILL.md, then its examples
+```
+
+`run_skills.py` runs each skill's code with the Python that runs it.
+That Python needs eindir (`maturin develop --features python`) and cogapp.
+Without cogapp, the contributing skill skips its version check.
+The Rust and C skills also need cargo, rustfmt, clippy, cargo-c, and C and C++ compilers.
+When valgrind is on PATH, the C ABI skill runs its examples under it as well.
+
+### Docs
+
+```bash
+pixi run -e docs docbld    # Org to RST (orgbld), then Sphinx HTML in docs/build/
+```
+
+`docs/source/*.rst` is generated and ignored by git, so edit the Org files.
+Emacs installs ox-rst from Milkypostman's Emacs Lisp Package Archive (MELPA) the first time, so the first build needs network access.
+After changing the manual, this file or a skill, run `python3 scripts/llms/build_llms.py` and commit the two files it rewrites.
+
+### Common tasks
+
+- Python against the package: `skills/eindir-python/`.
+- Rust against the crate: `skills/eindir-rust/`.
+- C or C++ against the library, or a C objective for Rust drivers: `skills/eindir-c-abi/`.
+- Preparing a commit, fragments, the docs build and version bumps: `skills/eindir-contributing/`.
+  Its `scripts/preflight.py --base origin/main` checks the fragments, the llms files, the version copies and the commit subjects.
+- A new Python export: the binding in `src/python.rs`, the re-export in `python/eindir/__init__.py` if it belongs in `eindir`, a test in `pytest/`, the expected surface in `skills/eindir-python/scripts/surface.py`, the Org page, and a fragment.
+- A version bump: edit `version` in `Cargo.toml`, then run `tools/sync-version.sh`, `cargo update --workspace` and `tools/check-version-drift.sh`.
+- A fragment: `docs/newsfragments/+<slug>.<type>.rst`, where `<type>` is one of `added`, `changed`, `fixed`, `removed`, `deprecated`, `security`, `dev` or `misc`.
+  Code in a fragment takes double backticks, as in reStructuredText.
+  Towncrier skips a file with an unknown type or in a subdirectory, without a warning.
+  It also links an issue to a file whose name lacks the `+`.
+  `preflight.py` reports all three.
+
+### Pitfalls
+
+Python, each reproduced by `skills/eindir-python/scripts/pitfalls.py`:
+
+- The Python examples on the Quickstart page and in four tutorials (quickstart, low-discrepancy, GLE thermostat, surrogates) stop with ImportError, against main and against PyPI 0.5.1 alike.
+  They import names that do not exist: `Bounds` and `Objective` from `eindir`, `GleThermostat` and `AdditiveSurrogate`.
+  `skills/eindir-python/` shows calls that work.
+- `GleThermostat`, `optimal_sampling_drift`, `matrix_exp`, `ldl_sqrt`, `halton_unit`, the surrogates, the gradient adapters and the test-function types such as `Rastrigin` are Rust-only.
+  `eindir._core.Bounds` and `PyObjective` exist, but `eindir.Bounds` does not.
+- Read the version from `eindir._core.__version__`, since `eindir.__version__` does not exist.
+- `_core` takes contiguous float64 NumPy arrays only: lists, integer arrays and strided views raise TypeError.
+- Rust panics reach Python as `pyo3_runtime.PanicException`, which derives from BaseException, so `except Exception` misses it.
+  Three calls panic: `_core.Bounds` with `low > high`, `Bounds.clip` with a point of the wrong length, and a `PyObjective` called from another thread.
+- eindir 0.5.1 from PyPI does not check bounds: `_core.Bounds` accepts `low > high`, and `contains` and `clip` look only at the coordinates the point has.
+  The checks came in 0.6.0.
+- `PyObjective.eval` does not check the length of the point, and `PyObjective.grad` without `grad_fn` raises ValueError.
+  Python has no finite-difference fallback.
+- `NumLimit(low, high)` keeps `dims=1` unless told otherwise.
+- `pip install "eindir[all]"` installs no extras, since the only extras are `plotter` and `testing`.
+
+Rust (see `skills/eindir-rust/`):
+
+- `FiniteDiffGradient` uses central differences with `h = 1e-5`, 2·dim evaluations per gradient.
+- On a type that implements both `Objective` and `Gradient`, `x.dim()` is ambiguous (E0034), so write `Objective::dim(&x)`.
+- `DifferentiableObjective` has no blanket impl, so add an empty `impl DifferentiableObjective<f64> for T {}`.
+- `Bounds::new` panics on lengths that differ, on a negative slack and on `low > high`.
+  `mkpoint` panics when a coordinate has `low == high`.
+- `GleThermostat::canonical(drift, dt, temperature, kb)` takes Boltzmann's constant as its fourth argument and has no mass argument.
+
+C (see `skills/eindir-c-abi/`):
+
+- Without the `capi` feature the library exports no `eindir_` symbols.
+  cargo-c enables it by itself.
+- A program linked against `target/<triple>/release` from `cargo cbuild` fails to start: the library's soname is `libeindir_core.so.0.7` and no file of that name is there.
+  Install with `cargo cinstall` and link the prefix.
+- Ubuntu's `libdlpack-dev` is DLPack 0.6, which lacks `DLManagedTensorVersioned`.
+  Use the v1.0 headers pinned in `ci.yml`.
+- eindir passes tensors to the callbacks unchecked.
+  A failing callback leaves `eindir_last_error()` as it was, and a success does not clear it.
+- `schema_id` in a required descriptor is never a wildcard, although the header says empty fields are.
+
+Repository:
+
+- `cog` on PATH may be cocogitto, the commit checker.
+  The version scripts need cogapp and call it as `python3 -m cogapp`.
+- cocogitto `6.3.0` reads `cog.toml`, and `7.0.0` refuses it ("unknown field `packages`").
+- At commit 8613085 the Lint job fails at `cargo fmt --check` (11 hunks in 6 files).
+  After it, clippy would fail with 4 errors, and `cog check` on two `REL:` commits from 2024.
+  The other 16 checks pass.
+- With `-Dwith_examples=true`, `meson.build` calls `subdir('examples')`, but `examples/` has no `meson.build`.
+
+Releases and the site, as of 2026-11-03:
+
+- `Cargo.toml` on main says 0.7.0, crates.io has 0.6.0, PyPI has 0.5.1 and the newest git tag is v0.5.2.
+  Check `cargo info eindir-core` and `pip index versions eindir` before relying on a released feature.
+- The HTML pages of [the site](https://eindir.rgoswami.me/) answer scripted clients with HTTP 403 and a challenge page.
+  A path that does not exist returns the front page with status 200.
+  Page sources are readable at `/_sources/<page>.rst.txt`, and `llms-full.txt` in the repository has all of them.
+
+## Skill: eindir-c-abi
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/skills/eindir-c-abi/SKILL.md
+
+Build and install the eindir C library, link C or C++ programs to it, and define objectives in C with DLPack 1.0 tensors that Rust drivers can call. Use when compiling against eindir-core.h or eindir-core.hpp, writing eval or gradient callbacks, embedding eindir_objective_t in another library's struct, checking ABI compatibility or semantic descriptors, or when a program fails to start because libeindir_core.so.0.7 is missing.
+
+The C library exports fifteen functions: version and ABI queries, the objective handle (`eindir_objective_new`, `_free`, `_dim`, `_has_grad`, `_bounds_low`, `_bounds_high`, `_eval`, `_grad`), semantic descriptors and `eindir_last_error`.
+Points, gradients and bounds cross the boundary as DLPack 1.0 `DLManagedTensorVersioned` tensors that the caller owns and lends for the length of one call.
+The C and C++ blocks are excerpts of `assets/objective_demo.c` and `assets/raii_demo.cpp`, which `scripts/build_and_run.py` compiles and runs.
+
+### Build and install
+
+```bash
+cargo install cargo-c        # once
+cargo cinstall --release --prefix="$PREFIX" --libdir=lib
+```
+
+This installs `include/eindir-core.h`, `include/eindir-core.hpp`, `lib/libeindir_core.a`, `lib/libeindir_core.so.0.7.0` with the links `libeindir_core.so.0.7` and `libeindir_core.so`, and `lib/pkgconfig/eindir-core.pc`.
+cargo-c turns on the `capi` feature by itself.
+
+- A plain `cargo build --release` builds `libeindir_core.so` with no `eindir_` symbols at all.
+  Add `--features capi`.
+- `cargo cbuild --release` leaves the header and libraries under `target/<host triple>/release/`, but that `libeindir_core.so` has the soname `libeindir_core.so.0.7` and nothing of that name sits next to it.
+  A program linked there fails to start with `error while loading shared libraries: libeindir_core.so.0.7: cannot open shared object file`.
+  Install to a prefix, as above, or link the static archive.
+- `eindir-core.h` includes `<dlpack/dlpack.h>`, so DLPack 1.0 must be on the include path.
+  Ubuntu's `libdlpack-dev` is 0.6, which has no `DLManagedTensorVersioned`.
+  The `ffi-smoke` job in `.github/workflows/ci.yml` pins the v1.0 archive and its sha256.
+- To generate the header without cargo-c: `cbindgen --config cbindgen.toml --crate eindir-core --output eindir-core.h`.
+  Under rustup with a default toolchain older than 1.88, cbindgen fails in `cargo metadata` with "feature `edition2024` is required".
+  Set `RUSTUP_TOOLCHAIN=stable` for that command.
+- With `-Dwith_examples=true`, `meson.build` calls `subdir('examples')`, but `examples/` has one Rust example and no `meson.build`.
+
+### Compile and link
+
+```bash
+export PKG_CONFIG_PATH="$PREFIX/lib/pkgconfig"
+cc -std=c99 -Wall -Wextra -Wpedantic -Werror -I"$DLPACK_ROOT/include" \
+  $(pkg-config --cflags eindir-core) objective_demo.c \
+  $(pkg-config --libs eindir-core) -Wl,-rpath,"$PREFIX/lib" -o objective_demo
+```
+
+For a static link, name `"$PREFIX/lib/libeindir_core.a"` in place of `-leindir_core` and add the system libraries that `pkg-config --static --libs eindir-core` lists after it.
+C++ uses the same flags with `c++ -std=c++17`.
+
+### Tensors
+
+A borrowed, contiguous float64 vector on the CPU.
+Zeroing the struct leaves `strides` NULL (contiguous), `byte_offset` 0 and no deleter.
+The `shape` array must outlive the call.
+
+```c
+static struct DLManagedTensorVersioned vector(double *data, int64_t *shape) {
+    struct DLManagedTensorVersioned t;
+    memset(&t, 0, sizeof t);
+    t.version.major = DLPACK_MAJOR_VERSION;
+    t.version.minor = DLPACK_MINOR_VERSION;
+    t.dl_tensor.data = data;
+    t.dl_tensor.device.device_type = kDLCPU;
+    t.dl_tensor.ndim = 1;
+    t.dl_tensor.dtype.code = kDLFloat;
+    t.dl_tensor.dtype.bits = 64;
+    t.dl_tensor.dtype.lanes = 1;
+    t.dl_tensor.shape = shape;
+    return t;
+}
+```
+
+### Callbacks
+
+`eindir_objective_eval` and `eindir_objective_grad` check only that the handle, the point and the output are not NULL, then hand the point to your callback as it is.
+The callback has to check the shape, dtype, device and strides, and honour `byte_offset`:
+
+```c
+static int is_f64_vector(const struct DLManagedTensorVersioned *t, int64_t n) {
+    const DLTensor *x = &t->dl_tensor;
+    return x->data != NULL && x->ndim == 1 && x->shape[0] == n &&
+           x->dtype.code == kDLFloat && x->dtype.bits == 64 &&
+           x->dtype.lanes == 1 && x->device.device_type == kDLCPU &&
+           (x->strides == NULL || x->strides[0] == 1);
+}
+
+static double *elements(const struct DLManagedTensorVersioned *t) {
+    return (double *)((char *)t->dl_tensor.data + t->dl_tensor.byte_offset);
+}
+```
+
+- The status the callback returns is what `eval` or `grad` returns.
+- A callback cannot set the error message.
+  After a callback fails, `eindir_last_error()` still returns whatever an earlier eindir call left there.
+  Keep your own error state in `user_data`.
+- `eindir_last_error()` is per thread, and a successful call does not clear it.
+  Read it only right after a call that returned an error status or NULL.
+- Nothing checks `eval_fn`, which must not be NULL.
+  `grad_fn` may be NULL: then `eindir_objective_has_grad` returns 0 and `eindir_objective_grad` returns `EINDIR_INVALID_PARAMETER` with "no gradient callback".
+- Rust drivers see a C objective through `EindirObjectiveWrapper` in `src/ffi.rs`.
+  It turns a failed value callback into NaN, returns zeros when there is no gradient callback, and ignores the status of the gradient callback.
+
+### Ownership
+
+```c
+    ctx = malloc(sizeof *ctx);
+    CHECK(ctx != NULL, "malloc");
+    *ctx = plain_ctx;
+    ctx->freed = &freed;
+    obj = eindir_objective_new(DIM, &low_t, &high_t, sphere_eval, sphere_grad,
+                               ctx, free_sphere);
+    CHECK(obj != NULL, "eindir_objective_new");
+```
+
+- `eindir_objective_new` copies the bounds, so their tensors can go once it returns.
+  It checks that they are 1-D, `dim` long and not NULL, then reads `dim` doubles from `data`, ignoring dtype, strides and `byte_offset`.
+  Pass contiguous float64 with a zero offset.
+- When it returns NULL it has not called `free_fn`, so `user_data` is still yours.
+- `eindir_objective_free` calls `free_fn(user_data)` when both are set, frees the bounds and the handle, and does nothing for NULL.
+- A library can instead embed the handle as the first member of its own struct and pass `&p.base` wherever an `eindir_objective_t *` is wanted.
+  The embedder owns `low`, `high` and everything else.
+  Never call `eindir_objective_free` on an embedded handle.
+
+```c
+struct producer {
+    eindir_objective_t base;
+    double low[DIM];
+    double high[DIM];
+    struct sphere sphere;
+};
+```
+
+```c
+    p.base.dim = DIM;
+    p.base.low = p.low;
+    p.base.high = p.high;
+    p.base.eval_fn = sphere_eval;
+    p.base.grad_fn = sphere_grad;
+    p.base.user_data = &p.sphere;
+    p.base.free_fn = NULL;
+    p.base.descriptor = &produced;
+```
+
+### ABI version and descriptors
+
+`eindir_core_abi_family()` returns `"eindir.objective"`, and `eindir_core_abi_stamp()` returns an `eindir_abi_stamp_t` with the ABI version, the objective layout, the size and alignment of `eindir_objective_t`, the DLPack version and the feature bits.
+`eindir_core_abi_compatible(&stamp)` compares a consumer's `eindir_abi_stamp_t` with the library's.
+The ABI major, objective layout, size, alignment and DLPack major must be equal.
+The consumer's ABI and DLPack minors must be no newer than the library's, and it must set no feature bit the library lacks.
+The library advertises `EINDIR_ABI_FEATURE_BATCH`, but the C API has no batched call.
+Evaluate one point per call.
+
+Besides the ABI version, a descriptor states units, sign conventions, operations, and the device, dtype and layout of the tensors.
+`eindir_objective_new` leaves the `descriptor` field NULL and takes no argument for it.
+Producers that embed the handle set the field themselves, as above.
+A consumer fills in the fields it needs and compares the two descriptors.
+
+```c
+    memset(&required, 0, sizeof required);
+    required.schema_id = produced.schema_id;
+    required.operations = EINDIR_OBJECTIVE_OPERATION_ENERGY;
+    required.tensor_dtype_bits = 64;
+    CHECK(eindir_objective_descriptor_compatible(&produced, &required) == 1,
+          "zero and empty fields are wildcards");
+    required.energy_unit = "hartree";
+    CHECK(eindir_objective_descriptor_compatible(&produced, &required) == 0,
+          "a unit mismatch is refused");
+```
+
+Empty or NULL strings and zero numbers in `required` match anything, and `operations` must be a subset.
+`schema_id` is never a wildcard.
+An empty one is refused, whatever the header comment says.
+A mismatch sets the message "eindir objective semantic descriptor mismatch" without naming the field.
+
+### C++
+
+`eindir-core.hpp` includes the C header and adds `eindir::version()`, nothing more.
+Own handles with `std::unique_ptr`, and hand the context over only once `eindir_objective_new` has succeeded:
+
+```cpp
+using Objective = std::unique_ptr<eindir_objective_t, decltype(&eindir_objective_free)>;
+```
+
+```cpp
+    auto context = std::make_unique<Weighted>(Weighted{std::move(w)});
+    const std::size_t dim = context->w.size();
+    Objective obj(eindir_objective_new(dim, &low_t, &high_t, weighted_eval, nullptr,
+                                       context.get(), delete_weighted),
+                  eindir_objective_free);
+    if (obj) {
+        context.release();
+    }
+    return obj;
+```
+
+### Run the examples
+
+```bash
+RUSTUP_TOOLCHAIN=stable python scripts/build_and_run.py
+```
+
+The script installs the library under `target/skill-c-abi/prefix` of the eindir checkout, fetches DLPack 1.0 unless `DLPACK_ROOT` is set, then compiles both examples with `$CC` and `$CXX` and runs them, under valgrind too when it is installed.
+`objective_demo` prints the library version, the ABI version, the objective layout and the DLPack version, then each error message it provokes, and ends with `all checks passed`.
+`raii_demo` prints `f(0.5, -1) = 3.5` and the message for bounds of the wrong length.
+
+## Skill: eindir-contributing
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/skills/eindir-contributing/SKILL.md
+
+Prepare a change to eindir for review. Covers which files to edit for code, the C ABI, the manual and the version, the commit types cog accepts, towncrier fragments, the Org to Sphinx docs build, regenerating llms.txt, bumping the version from Cargo.toml, and the CI failures on main that predate any change. Use before committing to eindir, when the lint, version-drift or skills CI jobs fail, or when preparing a release.
+
+Before you commit, run `scripts/preflight.py --base origin/main` from this skill.
+It checks the fragments, `llms.txt`, the version copies and your commit subjects, as described below.
+
+### Where a change goes
+
+- Rust API: edit `src/`, along with its tests in `tests/` or the module's `#[cfg(test)]` and the Org page that documents it.
+- Python extension: edit `src/python.rs` and `src/py_objective.rs` (`eindir._core`), then update `pytest/` and `skills/eindir-python/scripts/surface.py`.
+- Pure-Python package: edit `python/eindir/` and its tests in `pytest/`.
+- C ABI: edit `src/ffi.rs`, from which cbindgen writes `eindir-core.h`.
+  `tests/ffi_smoke.c`, `tests/header_check.c`, `tests/header_check.cpp` and `include/eindir-core.hpp` must change with it.
+- Manual: edit `docs/orgmode/**/*.org`, and regenerate `llms.txt` and `llms-full.txt`.
+- Version: edit `version` in `Cargo.toml` only, as "Version" below explains.
+
+`docs/source/*.rst` and `docs/build/` are generated and ignored by git, so edit the Org files.
+
+### Commit subjects
+
+`type(scope): description`, or `type: description`, with no period at the end.
+cog accepts its built-in types (`feat`, `fix`, `docs`, `test`, `ci`, `chore`, `style`, `refactor`, `perf`, `build`, `revert`) and the ones `cog.toml` adds (`enh`, `bug`, `maint`, `prj`, `doc`, `tst`, `bld`, `gen`, `dat`, `bench`).
+It ignores case, which is why the `MAINT:` and `DOC:` commits of 2023 and early 2024 pass, but every commit since then writes the type in lowercase.
+Do the same.
+`feat`, `fix`, `docs`, `chore`, `ci` and `test` are the common ones.
+
+### News fragments
+
+Every change outside `docs/` gets a fragment in `docs/newsfragments/`, named `+<slug>.<type>.rst`, or `123.<type>.rst` to link issue or pull request 123.
+`<type>` is one of `added`, `changed`, `fixed`, `removed`, `deprecated`, `security`, `dev` and `misc`.
+Write a sentence or two in plain prose, with code in double backticks as in reStructuredText.
+The fragment for the autodiff feature, an `added` one, read:
+
+```rst
+Optional ``autodiff`` feature: ``ForwardAd`` wraps a ``DualField`` written
+once over ``num-dual`` and supplies an exact fused gradient.
+```
+
+towncrier also reads `.md` fragments (the 0.7.0 one was `c-header.fixed.md`, with single backticks) and copies the text into `CHANGELOG.md` as written.
+Without a warning, it skips a file whose name has no known type or that sits in a subdirectory, and it drops an empty one.
+A name that neither starts with `+` nor consists of digits becomes a link to an issue of that name.
+`scripts/preflight.py` catches all four.
+
+The towncrier draft, `pixi run towncrier-draft`, previews the next release notes under the version in `towncrier.toml`.
+At commit 8613085 that is 0.7.0, which `CHANGELOG.md` already has, so bump the version before building the notes for real.
+Fragments are consumed only when a release is prepared.
+
+### Docs
+
+```bash
+pixi install -e docs
+pixi run -e docs docbld     # Org to RST, then Sphinx HTML in docs/build/
+```
+
+`docbld` runs `orgbld` (Emacs exports `docs/orgmode/` to `docs/source/`) and installs `sphinx-rustdocgen` into the environment on its first run.
+At commit 8613085 it built with no Sphinx warnings.
+Keep it that way.
+
+After any change to the Org files, `AGENTS.md` or a skill, regenerate `llms.txt` and `llms-full.txt`.
+
+```bash
+python3 scripts/llms/build_llms.py
+```
+
+### Version
+
+The `version` in `Cargo.toml` is the only copy written by hand.
+`pyproject.toml` reads it through maturin, the C and Python libraries report it at run time, and `meson.build`, `CMakeLists.txt`, `pixi.toml` and `towncrier.toml` hold generated copies between cogapp markers.
+To bump it:
+
+```bash
+python3 -m pip install cogapp==3.6.0   # the version CI pins
+tools/sync-version.sh                  # rewrite the generated copies
+cargo update --workspace               # Cargo.lock
+tools/check-version-drift.sh
+```
+
+- Call cogapp as `python3 -m cogapp`, as the scripts do: `cog` on PATH may be cocogitto.
+- Do not edit between `[[[cog` and `[[[end]]]` by hand.
+- After `sync-version.sh` alone, the drift check still fails with `Cargo.lock is out of date; run cargo update --workspace`.
+- With cargo older than 1.88 it prints that same message although the lock file is fine.
+  The real error, a few lines above, is "feature `edition2024` is required".
+  Use `RUSTUP_TOOLCHAIN=stable`.
+
+### CI on main
+
+At commit 8613085, 16 of the 17 GitHub checks passed.
+The Lint job fails at its first step, `cargo fmt --check`, with 11 hunks in 6 files under `src/`.
+Its later steps do not run.
+Run by hand, `cargo clippy --all-features --all-targets -- -D warnings` reports 4 errors (three unsafe functions without a `# Safety` section and one hand-built nul-terminated string), and `cog check`, which reads the whole history, rejects the two `REL:` commits of 2024-02-17.
+Lint is red before your change, so keep unrelated reformatting out of your commit.
+
+### Scripts
+
+`scripts/preflight.py` prints one line per check: ok, FAIL or skip.
+
+```bash
+python3 scripts/preflight.py                        # fragments, llms.txt, version copies
+python3 scripts/preflight.py --base origin/main     # also subjects and a fragment for the change
+python3 scripts/preflight.py --subject "fix(ffi): reject NULL bounds"
+```
+
+It exits 1 when a check fails.
+The version check needs cogapp in the Python that runs the script and cargo 1.88 or newer.
+Under rustup, set `RUSTUP_TOOLCHAIN=stable`.
+
+## Skill: eindir-python
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/skills/eindir-python/SKILL.md
+
+Use the eindir Python package to build box bounds, wrap a Python function and optionally its gradient as an objective, and draw bounded Halton (low-discrepancy) start points, through eindir and its Rust extension eindir._core. Says which names exist in Python and which are Rust-only (the generalized Langevin equation (GLE) thermostat, the surrogates, the gradient adapters, the builtin objective types), and which argument types and exceptions trip callers up. Use when writing Python against eindir, when an example from the eindir manual fails with ImportError, or when an eindir call raises TypeError or PanicException.
+
+### What exists where
+
+The Python surface is two modules:
+
+| Module | Names |
+|---|---|
+| `eindir` | `NumLimit`, `FPair`, `ObjectiveFunction`, `OutOfBounds`, `low_discrepancy_points`, `styblinski_tang`, and array API, DLPack and TVM-FFI helpers |
+| `eindir._core` (Rust) | `Bounds`, `PyObjective`, `FPair`, `low_discrepancy_points`, `shifted_low_discrepancy_points`, `__version__` |
+
+The rest of the crate has no Python binding: `GleThermostat`, `optimal_sampling_drift`, `matrix_exp`, `ldl_sqrt`, `halton_unit`, `AdditiveSurrogate`, `ChebyshevSurrogate`, `ReducedObjective`, the `Objective` trait, `FiniteDiffGradient`, `AnalyticGradient` and the builtin objective types (`Rastrigin`, `Rosenbrock`, `Ackley`, `StybTang2D`).
+The manual's Quickstart and its Python quickstart, low-discrepancy, GLE and surrogate tutorials import some of these from `eindir`, so those examples stop with ImportError.
+For the GLE thermostat and the surrogates, write Rust (the `eindir-rust` skill).
+
+`scripts/surface.py` checks this table against the installed package.
+The version string is `eindir._core.__version__`, and `eindir.__version__` does not exist.
+
+### An objective with bounds and a gradient
+
+`_core.Bounds(low, high, slack=1e-6)` is a box.
+`_core.PyObjective(fn, bounds, grad_fn=None)` wraps a Python callable so Rust code can call it.
+Both take float64 NumPy arrays.
+
+```python
+import numpy as np
+from eindir import _core
+
+low = np.array([-5.12, -5.12])
+high = np.array([5.12, 5.12])
+bounds = _core.Bounds(low, high)
+
+
+def sphere(x):
+    return float(np.sum((x - 1.0) ** 2))
+
+
+def sphere_grad(x):
+    return 2.0 * (x - 1.0)
+
+
+obj = _core.PyObjective(sphere, bounds, grad_fn=sphere_grad)
+x = np.array([0.0, 3.0])
+assert obj.dim == 2 and obj.eval(x) == 5.0
+assert np.array_equal(obj.grad(x), [-2.0, 4.0])
+assert bounds.dims == 2 and bounds.contains(x)
+assert np.array_equal(bounds.clip(np.array([9.0, -9.0])), [5.12, -5.12])
+print(obj.eval(x), obj.grad(x), bounds.slack)
+```
+
+`Bounds` exposes `dims`, `slack`, `contains` and `clip`, but not the corners: keep your own `low` and `high` arrays.
+
+### Start points
+
+`eindir.low_discrepancy_points(low, high, n, skip=1)` returns an `(n, d)` float64 array of Halton points scaled to the box.
+The same arguments give the same points.
+`_core.shifted_low_discrepancy_points(low, high, n, skip=1, seed=0)` applies a seeded random shift, so different seeds give independent replicas of the design.
+Like every `_core` function, it wants float64 arrays and returns a list of lists.
+
+```python
+import numpy as np
+import eindir
+from eindir import _core
+
+low = np.array([-5.12, -5.12])
+high = np.array([5.12, 5.12])
+obj = _core.PyObjective(lambda x: float(np.sum((x - 1.0) ** 2)), _core.Bounds(low, high))
+
+starts = eindir.low_discrepancy_points(low, high, 8)
+assert starts.shape == (8, 2)
+values = np.array([obj.eval(row) for row in starts])
+best = int(np.argmin(values))
+print("best start", starts[best], "value", values[best])
+
+replica = np.asarray(_core.shifted_low_discrepancy_points(low, high, 8, 1, 3))
+assert replica.shape == (8, 2) and not np.allclose(replica, starts)
+assert np.all((replica >= low) & (replica <= high))
+```
+
+Rows of the array that `eindir.low_discrepancy_points` returns are contiguous, so they can go straight to `obj.eval`.
+
+### The pure-Python classes
+
+`NumLimit`, `FPair` and `ObjectiveFunction` in `eindir` are plain Python and separate from `_core.Bounds` and `_core.PyObjective`.
+A subclass of `ObjectiveFunction` implements `singlepoint`, `multipoint` and `__repr__`.
+Calling it counts calls in `.calls` and picks one of the two by comparing the input size with `limits.dims`.
+
+```python
+import numpy as np
+import eindir
+
+
+class Sphere(eindir.ObjectiveFunction):
+    def singlepoint(self, pos):
+        return float(np.sum(pos**2))
+
+    def multipoint(self, pos):
+        return np.sum(pos**2, axis=-1)
+
+    def __repr__(self):
+        return "Sphere"
+
+
+low = np.array([-5.12, -5.12])
+high = np.array([5.12, 5.12])
+f = Sphere(eindir.NumLimit(low=low, high=high, dims=2))
+assert f(np.array([1.0, 2.0])) == 5.0
+assert np.array_equal(f(np.array([[1.0, 2.0], [0.0, 0.0]])), [5.0, 0.0])
+assert f.calls == 2
+f.limits.check(np.array([1.0, 2.0]))  # raises eindir.OutOfBounds outside the slack
+```
+
+The plain Python part also has a test function: `eindir.styblinski_tang(x)` evaluates Styblinski-Tang along the last dimension of any array API array.
+Its minimum is about -39.166 per coordinate, at -2.9035 in each.
+
+### Pitfalls
+
+`scripts/pitfalls.py` reproduces each of these.
+
+- `_core` functions take float64 NumPy arrays only.
+  Lists and integer arrays raise TypeError ("cannot be converted to 'PyArray<T, D>'").
+  A strided view such as `a[:, 0]` raises TypeError ("The given array is not contiguous").
+  Use `np.ascontiguousarray(x, dtype=np.float64)`.
+  `eindir.low_discrepancy_points` converts lists for you.
+- `_core.Bounds` with any `low[i] > high[i]`, and `Bounds.clip` with a point of the wrong length, raise `pyo3_runtime.PanicException`.
+  It derives from BaseException, so `except Exception` does not catch it, and Rust prints the panic to stderr first.
+  Check the inputs before the call.
+  `_core.low_discrepancy_points` raises ValueError for the same inverted bounds.
+- eindir 0.5.1 from PyPI predates those checks, which came in 0.6.0.
+  Its `Bounds` accepts `low > high`, and `contains` and `clip` look only at the coordinates the point has.
+  A short point is judged or clipped on those alone, and a long one raises PanicException with `ndarray: index out of bounds`.
+  Read `_core.__version__` before relying on either behaviour.
+- Nothing checks lengths on evaluation: `obj.eval` of a 3-vector on a 2-D objective calls your function anyway, and from 0.6.0 `bounds.contains` of a wrong-length point returns False.
+- `obj.grad` without `grad_fn` raises ValueError.
+  Python has no finite-difference fallback, so pass a gradient or difference it yourself.
+- A `PyObjective` belongs to the thread that made it.
+  Calling it from another thread raises PanicException ("is unsendable, but sent to another thread").
+- `skip=0` makes the first point the low corner of the box, and the default `skip=1` avoids it.
+  `n=0` returns a 1-D empty array, not shape `(0, d)`.
+- `NumLimit(low, high)` leaves `dims` at 1, and `ObjectiveFunction` then sends a single 2-D point to `multipoint`.
+  Always pass `dims=len(low)`.
+  Calling an `ObjectiveFunction` with a list raises AttributeError (`.ravel`).
+- `pip install "eindir[all]"` installs nothing extra: the extras are `plotter` and `testing`.
+
+### Scripts
+
+- `scripts/surface.py` prints where each name lives and fails when the installed package no longer matches the table above.
+- `scripts/pitfalls.py` asserts every pitfall above.
+
+Run them with the Python that has eindir installed, from this directory:
+
+```bash
+python scripts/surface.py
+python scripts/pitfalls.py
+```
+
+## Skill: eindir-rust
+
+Source: https://raw.githubusercontent.com/HaoZeke/eindir/main/skills/eindir-rust/SKILL.md
+
+Write Rust against the eindir-core crate. Implement the Objective trait on box Bounds, draw Halton start points, evaluate batches in parallel, and supply gradients (analytic, central finite differences or forward-mode autodiff). Covers the builtin test objectives, the generalized Langevin equation (GLE) thermostat with coloured noise built from the optimal-sampling drift, and fitting and sampling the additive Chebyshev surrogate. Use for the GLE thermostat and the surrogates, which have no Python binding, when the eindir manual's Python examples for them fail, or when eindir-core does not build or panics.
+
+### Depend on it
+
+The package is `eindir-core` and the library is `eindir_core`.
+Take `ndarray` and `rand` at the versions `eindir-core` uses, so that `ArrayView1` and the random number generators are the same types:
+
+```toml
+[dependencies]
+eindir-core = { git = "https://github.com/HaoZeke/eindir" }
+ndarray = "0.17"
+rand = "0.9"
+```
+
+crates.io releases can lag the main branch, so compare `cargo info eindir-core` with `version` in the repository's `Cargo.toml` before choosing one.
+
+The crate uses edition 2024 and `rust-version = "1.88"`.
+An older cargo stops at the manifest with "feature `edition2024` is required".
+With rustup, use `rustup run stable cargo ...` or set `RUSTUP_TOOLCHAIN=stable`.
+
+### An objective
+
+`Objective<T>` needs `dim`, `bounds` and `eval`.
+`eval_batch` (serial by default) and `global_min` are optional.
+The trait requires `Send + Sync`, so keep counters in atomics or a `Mutex`, not `Cell` or `RefCell`.
+From [assets/objective_tour.rs](https://raw.githubusercontent.com/HaoZeke/eindir/main/skills/eindir-rust/assets/objective_tour.rs):
+
+```rust
+impl Objective<f64> for ShiftedSphere {
+    fn dim(&self) -> usize {
+        self.bounds.dims
+    }
+
+    fn bounds(&self) -> &Bounds<f64> {
+        &self.bounds
+    }
+
+    fn eval(&self, x: ArrayView1<f64>) -> f64 {
+        self.evals.fetch_add(1, Ordering::Relaxed);
+        x.iter().map(|xi| (xi - 1.0).powi(2)).sum()
+    }
+}
+```
+
+The trait requires `bounds` to return a `Bounds<T>`.
+`Bounds::new(low, high, slack)` panics when the lengths differ, when `slack` is negative or when any `low[i] > high[i]`.
+`contains` allows `slack` beyond each face and returns false for a point of the wrong length, and `clip` panics on one.
+`mkpoint` (uniform sampling) panics on a coordinate with `low[i] == high[i]`.
+
+### Start points and batches
+
+```rust
+let starts = low_discrepancy_points(obj.bounds(), 16, 1);
+assert_eq!(starts.dim(), (16, 3));
+assert!(starts.outer_iter().all(|row| obj.bounds().contains(row)));
+
+let serial = obj.eval_batch(starts.view());
+let parallel = eval_batch_parallel(&obj, starts.view());
+assert_eq!(serial, parallel);
+```
+
+`low_discrepancy_points(bounds, n, skip)` is the Halton set (`halton_points`) scaled to the box, one point per row.
+`skip = 0` puts the low corner first.
+`shifted_low_discrepancy_points(bounds, n, skip, seed)` adds a seeded random shift, one independent replica per seed, and `boundary_anchored_low_discrepancy_points` puts the box vertices first when `n >= 2^dim`.
+`eval_batch_parallel` spreads the rows over rayon once there are `EVAL_BATCH_PARALLEL_MIN` of them and calls `eval_batch` below that.
+
+### Gradients
+
+`Gradient<T>` has `grad` and `dim`.
+`AnalyticGradient::new(dim, f)` wraps a closure.
+`FiniteDiffGradient::new(obj)` takes ownership of an objective and uses central differences with `h = 1e-5` (`with_step(obj, h)` to change it).
+That costs `2 * dim` evaluations per gradient.
+The n_p+1 that the manual's gradients and FAQ pages give for a finite-difference fallback is not this type's cost.
+
+```rust
+let fd = FiniteDiffGradient::new(obj);
+let before = fd.obj.evals.load(Ordering::Relaxed);
+let x = array![0.0, 2.0, 3.0];
+let g = fd.grad(x.view());
+let used = fd.obj.evals.load(Ordering::Relaxed) - before;
+assert_eq!(used, 2 * x.len());
+```
+
+`DifferentiableObjective<T>` (an `Objective` and a `Gradient`, with `value_and_gradient`) has no blanket impl: write `impl DifferentiableObjective<f64> for MyType {}` or override `value_and_gradient` for a fused evaluation.
+The builtins `Rastrigin::<D>`, `Rosenbrock::<D>`, `Ackley::<D>` and `StybTang2D` implement all three and return their minimum from `global_min`.
+On a type with both traits `x.dim()` is ambiguous (error E0034), so write `Objective::dim(&x)`.
+The `autodiff` feature adds `ForwardAd`, which turns a `DualField` written once over `num-dual` into an objective with an exact gradient.
+
+### The GLE thermostat
+
+From [assets/gle_and_surrogate.rs](https://raw.githubusercontent.com/HaoZeke/eindir/main/skills/eindir-rust/assets/gle_and_surrogate.rs):
+
+```rust
+let omega0 = 0.2;
+let drift = optimal_sampling_drift(omega0);
+let n = OPTIMAL_SAMPLING_NS + 1;
+assert_eq!(drift.dim(), (n, n));
+
+let (dt, temperature, kb) = (0.01, 1.0, 1.0);
+let gle = GleThermostat::canonical(&drift, dt, temperature, kb);
+let covariance = Array2::<f64>::eye(gle.ns + 1) * temperature;
+let dim = 4;
+let mut state = gle.sample_stationary(&covariance, dim, kb, &mut rng);
+assert_eq!(state.dim(), (gle.ns + 1, dim));
+```
+
+`optimal_sampling_drift(omega0)` is the fitted drift for the band `[omega0, 100 omega0]`, with `OPTIMAL_SAMPLING_NS` auxiliary momenta.
+`canonical(drift, dt, temperature, kb)` sets the covariance to `temperature * I`.
+Its fourth argument is the Boltzmann constant, 1 in reduced units.
+Use `GleThermostat::new(drift, covariance, dt, kb)` for any other covariance.
+The state is `(ns + 1) x dim`: row 0 is the mass-scaled physical momentum of each coordinate and the other rows are the auxiliary momenta.
+`step(&mut state.view_mut(), &mut rng)` applies one `s <- T s + S xi` update in place.
+The thermostat never moves positions.
+An integrator such as anneal's `gle_langevin` driver moves them.
+`matrix_exp` and `ldl_sqrt` are public for building other propagators.
+
+### Surrogates
+
+```rust
+let pilot = low_discrepancy_points(&bounds, 128, 1);
+let y: Array1<f64> = pilot.outer_iter().map(f).collect();
+let degree = 8;
+let surrogate = AdditiveSurrogate::fit(pilot.view(), y.view(), bounds.clone(), degree);
+```
+
+`AdditiveSurrogate::fit(x, y, bounds, degree)` fits `c + sum_j g_j(x_j)` with a degree-`degree` Chebyshev series per coordinate, by 12 backfitting passes (`fit_backfit` takes the count).
+It is an `Objective` and a `Gradient`, and `sample(n, temperature, grid_m, rng)` draws `n` independence proposals inside the box from `exp(-(f - f_min) / T)`.
+`ChebyshevSurrogate::new(bounds, terms, coeffs)` evaluates a total-degree Chebyshev series whose multi-indices and coefficients you supply.
+No routine in eindir fits them.
+`ReducedObjective::new(inner, origin, basis, bounds)` evaluates `inner` at `clip(origin + basis r)` for `r` in the reduced box.
+
+### Run the examples
+
+```bash
+RUSTUP_TOOLCHAIN=stable python scripts/run_examples.py
+```
+
+`scripts/run_examples.py` builds both files in `assets/` as binaries of a throwaway crate that depends on this checkout (or `$EINDIR_REPO`, or a fresh clone), checks them with rustfmt and `clippy -D warnings`, runs them, and fails if a `rust` or `toml` block in this file no longer matches the examples or `Cargo.toml`.
+The objective tour prints the best start, a finite-difference gradient from 6 evaluations and the Rastrigin minimum.
+The second example prints the mean squared momentum under the thermostat (close to `kB T`) and the surrogate's worst error on fresh points.
+
+### Features
+
+- `capi`: the C ABI and `eindir-core.h` (see the `eindir-c-abi` skill).
+- `py-objective`, `python`: the pyo3 extension `eindir._core`.
+- `autodiff`: `ForwardAd` and `DualField` through `num-dual`.
+
+`cargo test` runs the tests of the default features, and `cargo test --all-features` runs the rest.

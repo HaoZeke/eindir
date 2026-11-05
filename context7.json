@@ -1,0 +1,32 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "eindir",
+  "description": "Rust crate eindir-core, with Python, C and C++ bindings, of primitives for bounded optimisation and sampling on R^D: objectives over box bounds, Halton point sets, gradients, a generalized Langevin equation (GLE) thermostat and Chebyshev surrogates. The anneal optimiser is built on it.",
+  "excludeFolders": [
+    "branding",
+    "docs/newsfragments",
+    "docs/source",
+    "pytest",
+    "scripts",
+    "tests",
+    "tools"
+  ],
+  "excludeFiles": [
+    "CHANGELOG.md",
+    "CMakeLists.txt",
+    "CODE_OF_CONDUCT.md",
+    "llms.txt",
+    "meson_options.txt"
+  ],
+  "rules": [
+    "From Python use eindir._core.Bounds and eindir._core.PyObjective. eindir does not export Bounds, Objective, GleThermostat or AdditiveSurrogate, though Python examples on five pages of the manual import them from it.",
+    "Only the Rust crate has the GLE thermostat, the surrogates, the gradient adapters and the builtin test-function types. Write Rust against eindir-core for them.",
+    "eindir._core takes contiguous float64 NumPy arrays only. Lists, integer arrays and strided views raise TypeError.",
+    "Rust panics reach Python as pyo3_runtime.PanicException, a BaseException that except Exception misses. Three calls panic: Bounds with low > high and Bounds.clip of a wrong-length point, both since 0.6.0, and a PyObjective called from another thread.",
+    "Read the version from eindir._core.__version__, since eindir.__version__ does not exist. Releases lag main, so check cargo info eindir-core and pip index versions eindir before relying on a new feature.",
+    "In Rust, DifferentiableObjective has no blanket impl, so add an empty impl DifferentiableObjective<f64> for T {}. On a type with Objective and Gradient, call Objective::dim(&x).",
+    "The C ABI needs DLPack 1.0 headers and the capi feature. Install with cargo cinstall and link against that prefix. A program linked against the cargo cbuild tree cannot load libeindir_core.so.0.7.",
+    "eindir_last_error() is per thread and only eindir sets it: a failing callback leaves the previous message and a success does not clear it. Go by the returned status.",
+    "Edit the manual in docs/orgmode/*.org. The command pixi run -e docs orgbld writes docs/source/*.rst from it, and git ignores those files. Change the version only in Cargo.toml, then run tools/sync-version.sh."
+  ]
+}

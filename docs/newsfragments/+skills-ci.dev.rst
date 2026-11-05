@@ -1,0 +1,1 @@
+The Skills workflow checks that ``llms.txt`` and ``llms-full.txt`` match the manual, tests their generator, and runs every skill's examples and scripts against the checkout, so a guide that stops matching the code fails CI.

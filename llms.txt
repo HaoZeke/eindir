@@ -1,0 +1,61 @@
+# eindir
+
+> eindir is a Rust crate, eindir-core, with Python, C and C++ bindings. It has the primitives for bounded optimisation and sampling on R^D: the Objective trait, box bounds, Halton point sets, gradients, a GLE coloured-noise thermostat and surrogate models. The anneal optimiser is built on it.
+
+Each link points at the Org source of a page under `docs/orgmode/` on GitHub. The site, https://eindir.rgoswami.me/, is built from the same sources by Sphinx, and `llms-full.txt` has every page as Markdown in one file.
+
+Five pages of the site have Python examples that stop with ImportError. They are the Quickstart page and the Python quickstart, low-discrepancy, GLE and surrogate tutorials. The Python package is narrower than the Rust crate. `eindir` exports `NumLimit`, `FPair`, `ObjectiveFunction`, `OutOfBounds`, `low_discrepancy_points`, `styblinski_tang` and array API, DLPack and TVM-FFI helpers, and `eindir._core` adds `Bounds`, `PyObjective` and `shifted_low_discrepancy_points`. `GleThermostat`, `optimal_sampling_drift`, `matrix_exp`, `ldl_sqrt`, `halton_unit`, the surrogates, the gradient adapters and the builtin objective types are Rust-only. The `eindir-python` skill shows the calls that work.
+
+That skill and the three others under `skills/` give worked examples of common tasks, with scripts that CI runs. `AGENTS.md` has the build, test and documentation commands and the mistakes that are easy to make. Both are reproduced at the end of `llms-full.txt`.
+
+## Getting started
+
+- [Overview](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/index.org): What eindir provides, its bindings, the pages to read first, and how it relates to anneal.
+- [Quickstart](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/quickstart.org): Install commands, then Python examples for an objective with low-discrepancy starts and for a standalone GLE thermostat.
+- [Tutorials](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/tutorials.org): Install from pip, pixi or source, print the extension version, and build a NumLimit box from Python.
+- [Quickstart with Python](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/tutorials/quickstart.org): Define a Python objective, draw low-discrepancy starts inside its bounds and evaluate them.
+- [Low-discrepancy points & sampling](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/tutorials/low-discrepancy.org): Bounded Halton point sets from low_discrepancy_points(low, high, n, skip), with a 2-D example.
+- [GLE coloured-noise thermostat](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/tutorials/gle-thermostat.org): Why coloured noise helps on ill-conditioned objectives, and the drift, thermostat and stationary-sampling calls.
+- [Surrogates (additive, Chebyshev, reduced)](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/tutorials/surrogates.org): The additive (rank-1 Chebyshev), total-degree Chebyshev and reduced (active subspace) surrogates and their construction.
+
+## How-to Guides
+
+- [Installation](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/howto/install.org): Install the wheel from PyPI, the pixi environments, or build from source with cargo, cargo-c and maturin.
+- [Using with anneal](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/howto/using-with-anneal.org): Where each primitive plugs into the Obj, Cool, Neigh, Move and Accept components of anneal.
+- [Gradients](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/howto/gradients.org): How to give an objective a gradient, and the finite-difference fallback when it has none.
+- [Usage FAQ](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/howto/faq.org): Gradients for the GLE and Hamiltonian Monte Carlo (HMC) drivers, using eindir without anneal, and C and C++ consumers.
+- [Project FAQ](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/faq.org): The licence (MIT) and how to cite eindir.
+
+## Explanation
+
+- [Architecture](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/architecture.org): Describes the repository layout, the three crate types (rlib, cdylib, staticlib) and how the Python, C and C++ bindings are produced.
+- [The Primitives (traits & design)](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/explanation/primitives.org): The design of the Objective, low-discrepancy, GLE and surrogate primitives and how they feed one another.
+- [GLE Mechanics](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/explanation/gle.org): What the GLE thermostat stores and computes, why the covariance fixes correctness while the drift sets the speed, and how anneal drives it.
+- [Surrogate Mechanics](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/explanation/surrogates.org): The additive surrogate as a rank-1 functional tensor train, its O(d) independence sampling and the Metropolis correction on the true objective.
+
+## Reference
+
+- [Specification](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/spec.org): One sentence on the primitives the crate exposes.
+- [Rust API Reference](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/reference/rust-api.org): The entry page of the Rust API reference that Sphinx generates from the doc comments of the crate.
+- [Glossary](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/reference/glossary.org): One-line definitions of Objective, low_discrepancy_points, GLE, AdditiveSurrogate, ReducedObjective and optimal_sampling_drift.
+- [API Primitives (Python)](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/reference/api-primitives.org): A list of core symbol names. Of these only `low_discrepancy_points` (in `eindir`) and `Bounds` (in `eindir._core`) exist in Python, and the rest are Rust items.
+- [Bindings](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/bindings.org): Describes how the Python wheel, the C library with its header and pkg-config file, and the C++ helper header are built, with Meson and CMake snippets for consumers.
+- [Contributing](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/contributing.org): Setup, commit types, towncrier fragments, the single version source in Cargo.toml and how to bump it, style and tests.
+
+## Development
+
+- [Best Practices](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/dev/best_practices.org): Use one Objective for every driver, prefer low-discrepancy starts, reuse a fitted GLE drift, use surrogates as objectives or proposals, and keep arrays in one array namespace.
+- [AGENTS.md](https://raw.githubusercontent.com/HaoZeke/eindir/main/AGENTS.md): Build, test and documentation commands, common tasks and pitfalls for working in this repository.
+
+## Skills
+
+- [eindir-c-abi](https://raw.githubusercontent.com/HaoZeke/eindir/main/skills/eindir-c-abi/SKILL.md): Build and install the eindir C library, link C or C++ programs to it, and define objectives in C with DLPack 1.0 tensors that Rust drivers can call. Use when compiling against eindir-core.h or eindir-core.hpp, writing eval or gradient callbacks, embedding eindir_objective_t in another library's struct, checking ABI compatibility or semantic descriptors, or when a program fails to start because libeindir_core.so.0.7 is missing.
+- [eindir-contributing](https://raw.githubusercontent.com/HaoZeke/eindir/main/skills/eindir-contributing/SKILL.md): Prepare a change to eindir for review. Covers which files to edit for code, the C ABI, the manual and the version, the commit types cog accepts, towncrier fragments, the Org to Sphinx docs build, regenerating llms.txt, bumping the version from Cargo.toml, and the CI failures on main that predate any change. Use before committing to eindir, when the lint, version-drift or skills CI jobs fail, or when preparing a release.
+- [eindir-python](https://raw.githubusercontent.com/HaoZeke/eindir/main/skills/eindir-python/SKILL.md): Use the eindir Python package to build box bounds, wrap a Python function and optionally its gradient as an objective, and draw bounded Halton (low-discrepancy) start points, through eindir and its Rust extension eindir._core. Says which names exist in Python and which are Rust-only (the generalized Langevin equation (GLE) thermostat, the surrogates, the gradient adapters, the builtin objective types), and which argument types and exceptions trip callers up. Use when writing Python against eindir, when an example from the eindir manual fails with ImportError, or when an eindir call raises TypeError or PanicException.
+- [eindir-rust](https://raw.githubusercontent.com/HaoZeke/eindir/main/skills/eindir-rust/SKILL.md): Write Rust against the eindir-core crate. Implement the Objective trait on box Bounds, draw Halton start points, evaluate batches in parallel, and supply gradients (analytic, central finite differences or forward-mode autodiff). Covers the builtin test objectives, the generalized Langevin equation (GLE) thermostat with coloured noise built from the optimal-sampling drift, and fitting and sampling the additive Chebyshev surrogate. Use for the GLE thermostat and the surrogates, which have no Python binding, when the eindir manual's Python examples for them fail, or when eindir-core does not build or panics.
+
+## Optional
+
+- [Changelog](https://raw.githubusercontent.com/HaoZeke/eindir/main/CHANGELOG.md): Release notes, newest first.
+- [Code of Conduct](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/code_of_conduct.org): The Contributor Covenant 2.1, as adopted by the project.
+- [llms-full.txt](https://raw.githubusercontent.com/HaoZeke/eindir/main/llms-full.txt): The whole manual, AGENTS.md and the skills as one Markdown file.
