@@ -257,6 +257,11 @@ pub extern "C" fn eindir_core_abi_stamp() -> eindir_abi_stamp_t {
 }
 
 /// Returns nonzero when `stamp` can be consumed by this eindir ABI.
+///
+/// # Safety
+///
+/// `stamp` must be null or point to a readable [`eindir_abi_stamp_t`] for the
+/// duration of the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn eindir_core_abi_compatible(stamp: *const eindir_abi_stamp_t) -> i32 {
     if stamp.is_null() {
@@ -275,6 +280,11 @@ pub unsafe extern "C" fn eindir_core_abi_compatible(stamp: *const eindir_abi_sta
 }
 
 /// Return the semantic descriptor attached to an objective, or NULL.
+///
+/// # Safety
+///
+/// `obj` must be null or point to a live [`eindir_objective_t`]. The returned
+/// pointer aliases that objective's descriptor and is not freed here.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn eindir_objective_descriptor(
     obj: *const eindir_objective_t,
@@ -303,6 +313,12 @@ fn required_string_matches(actual: *const c_char, required: *const c_char) -> bo
 /// A non-empty string or nonzero scalar in `required` is exact; an empty or
 /// zero field acts as a wildcard. Operation bits are checked as a subset so a
 /// producer may advertise additional capabilities without breaking consumers.
+///
+/// # Safety
+///
+/// `actual` and `required` must each be null or point to a readable
+/// [`eindir_objective_descriptor_t`]. Every non-null string field must be a
+/// readable NUL-terminated string for the duration of the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn eindir_objective_descriptor_compatible(
     actual: *const eindir_objective_descriptor_t,
@@ -843,7 +859,7 @@ mod tests {
             unsafe { eindir_objective_descriptor_compatible(&actual, &required) },
             1
         );
-        required.energy_unit = b"hartree\0".as_ptr().cast();
+        required.energy_unit = c"hartree".as_ptr();
         assert_eq!(
             unsafe { eindir_objective_descriptor_compatible(&actual, &required) },
             0
