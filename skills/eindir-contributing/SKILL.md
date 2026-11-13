@@ -25,7 +25,7 @@ It checks the fragments, `llms.txt`, the version copies and your commit subjects
 ## Commit subjects
 
 `type(scope): description`, or `type: description`, with no period at the end.
-cog accepts its built-in types (`feat`, `fix`, `docs`, `test`, `ci`, `chore`, `style`, `refactor`, `perf`, `build`, `revert`) and the ones `cog.toml` adds (`enh`, `bug`, `maint`, `prj`, `doc`, `tst`, `bld`, `gen`, `dat`, `bench`).
+cog accepts its built-in types (`feat`, `fix`, `docs`, `test`, `ci`, `chore`, `style`, `refactor`, `perf`, `build`, `revert`) and the ones `cog.toml` adds (`enh`, `bug`, `maint`, `prj`, `doc`, `tst`, `bld`, `gen`, `dat`, `bench`, `rel`).
 It ignores case, which is why the `MAINT:` and `DOC:` commits of 2023 and early 2024 pass, but every commit since then writes the type in lowercase.
 Do the same.
 `feat`, `fix`, `docs`, `chore`, `ci` and `test` are the common ones.
@@ -93,8 +93,9 @@ tools/check-version-drift.sh
 At commit 8613085, 16 of the 17 GitHub checks passed.
 The Lint job fails at its first step, `cargo fmt --check`, with 11 hunks in 6 files under `src/`.
 Its later steps do not run.
-Run by hand, `cargo clippy --all-features --all-targets -- -D warnings` reports 4 errors (three unsafe functions without a `# Safety` section and one hand-built nul-terminated string), and `cog check`, which reads the whole history, rejects the two `REL:` commits of 2024-02-17.
-Lint is red before your change, so keep unrelated reformatting out of your commit.
+On that commit, `cargo clippy --all-features --all-targets -- -D warnings` reports 4 errors (three unsafe functions without a `# Safety` section and one hand-built nul-terminated string), and `cog check`, which reads the whole history, rejects the two `REL:` commits of 2024-02-17 because that `cog.toml` has no `rel` type.
+This tree is formatted, those three functions have a Safety section, the test builds its string with a C string literal, and `cog.toml` lists `rel`, so the same three checks pass.
+A commit based on 8613085 still meets a red Lint job, so keep unrelated reformatting out of it.
 
 ## Scripts
 

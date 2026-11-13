@@ -165,8 +165,9 @@ Repository:
   The version scripts need cogapp and call it as `python3 -m cogapp`.
 - cocogitto `6.3.0` reads `cog.toml`, and `7.0.0` refuses it ("unknown field `packages`").
 - At commit 8613085 the Lint job fails at `cargo fmt --check` (11 hunks in 6 files).
-  After it, clippy would fail with 4 errors, and `cog check` on two `REL:` commits from 2024.
-  The other 16 checks pass.
+  On that commit, clippy would then report 4 errors, and `cog check` would reject two `REL:` commits from 2024, because that `cog.toml` has no `rel` type.
+  The other 16 checks on that commit pass.
+  This tree is formatted, those unsafe functions are documented, and `cog.toml` lists `rel`, so fmt, clippy and `cog check` pass.
 - With `-Dwith_examples=true`, `meson.build` calls `subdir('examples')`, but `examples/` has no `meson.build`.
 
 Releases and the site, as of 2026-11-03:
