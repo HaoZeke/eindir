@@ -1,6 +1,6 @@
 ---
 name: eindir-contributing
-description: Prepare a change to eindir for review. Covers which files to edit for code, the C ABI, the manual and the version, the commit types cog accepts, towncrier fragments, the Org to Sphinx docs build, regenerating llms.txt, bumping the version from Cargo.toml, and the CI failures on main that predate any change. Use before committing to eindir, when the lint, version-drift or skills CI jobs fail, or when preparing a release.
+description: Prepare a change to eindir for review. Covers which files to edit for code, the C ABI, the manual and the version, the commit types cog accepts, towncrier fragments, the Org to Sphinx docs build, regenerating llms.txt, and bumping the version from Cargo.toml. Use before committing to eindir, when the lint, version-drift or skills CI jobs fail, or when preparing a release.
 license: See LICENSE in the eindir repository
 compatibility: The preflight script needs Python 3.11 or newer and git. Its version check also needs cogapp importable from the same Python and cargo 1.88 or newer, and is skipped otherwise. The docs build needs pixi, and network access the first time, when Emacs fetches the ox-rst package.
 ---
@@ -48,7 +48,7 @@ A name that neither starts with `+` nor consists of digits becomes a link to an 
 `scripts/preflight.py` catches all four.
 
 The towncrier draft, `pixi run towncrier-draft`, previews the next release notes under the version in `towncrier.toml`.
-At commit 8613085 that is 0.7.0, which `CHANGELOG.md` already has, so bump the version before building the notes for real.
+That version is the one `CHANGELOG.md` already has, so bump the version before building the notes for real.
 Fragments are consumed only when a release is prepared.
 
 ## Docs
@@ -59,8 +59,7 @@ pixi run -e docs docbld     # Org to RST, then Sphinx HTML in docs/build/
 ```
 
 `docbld` runs `orgbld` (Emacs exports `docs/orgmode/` to `docs/source/`) and installs `sphinx-rustdocgen` into the environment on its first run.
-At commit 8613085 it built with no Sphinx warnings.
-Keep it that way.
+Keep the build free of Sphinx warnings.
 
 After any change to the Org files, `AGENTS.md` or a skill, regenerate `llms.txt` and `llms-full.txt`.
 
@@ -87,15 +86,6 @@ tools/check-version-drift.sh
 - With cargo older than 1.88 it prints that same message although the lock file is fine.
   The real error, a few lines above, is "feature `edition2024` is required".
   Use `RUSTUP_TOOLCHAIN=stable`.
-
-## CI on main
-
-At commit 8613085, 16 of the 17 GitHub checks passed.
-The Lint job fails at its first step, `cargo fmt --check`, with 11 hunks in 6 files under `src/`.
-Its later steps do not run.
-On that commit, `cargo clippy --all-features --all-targets -- -D warnings` reports 4 errors (three unsafe functions without a `# Safety` section and one hand-built nul-terminated string), and `cog check`, which reads the whole history, rejects the two `REL:` commits of 2024-02-17 because that `cog.toml` has no `rel` type.
-This tree is formatted, those three functions have a Safety section, the test builds its string with a C string literal, and `cog.toml` lists `rel`, so the same three checks pass.
-A commit based on 8613085 still meets a red Lint job, so keep unrelated reformatting out of it.
 
 ## Scripts
 

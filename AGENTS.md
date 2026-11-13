@@ -74,8 +74,7 @@ maturin develop --features python && pytest pytest/
 tools/check-version-drift.sh             # needs cogapp: python3 -m pip install cogapp==3.6.0
 ```
 
-At commit 8613085, `cargo test` passes 41 tests and `cargo test --all-features` 54.
-Pytest passes 18 and skips one unless `array-api-strict` is installed.
+Pytest skips one test unless `array-api-strict` is installed.
 The `ffi-smoke` job installs the C library with cargo-c and runs `tests/ffi_smoke.c` under valgrind.
 The C ABI skill script does the same for its examples.
 
@@ -164,10 +163,7 @@ Repository:
 - `cog` on PATH may be cocogitto, the commit checker.
   The version scripts need cogapp and call it as `python3 -m cogapp`.
 - cocogitto `6.3.0` reads `cog.toml`, and `7.0.0` refuses it ("unknown field `packages`").
-- At commit 8613085 the Lint job fails at `cargo fmt --check` (11 hunks in 6 files).
-  On that commit, clippy would then report 4 errors, and `cog check` would reject two `REL:` commits from 2024, because that `cog.toml` has no `rel` type.
-  The other 16 checks on that commit pass.
-  This tree is formatted, those unsafe functions are documented, and `cog.toml` lists `rel`, so fmt, clippy and `cog check` pass.
+  `cog.toml` lists `rel` among its extra commit types.
 - With `-Dwith_examples=true`, `meson.build` calls `subdir('examples')`, but `examples/` has no `meson.build`.
 
 Releases and the site, as of 2026-11-03:
