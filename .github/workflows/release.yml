@@ -31,15 +31,15 @@ jobs:
             static_lib: libeindir_core.a
             shared_lib: libeindir_core.so
           - os: macos
-            runner: macos-14
+            runner: macos-15
             target: aarch64-apple-darwin
             artifact: eindir-core-macos-aarch64
             static_lib: libeindir_core.a
             shared_lib: libeindir_core.dylib
-          # x86_64 mac is cross-compiled from the arm64 runner; the macos-13
-          # x86_64 image is retired and queues forever.
+          # x86_64 mac is cross-compiled from the arm64 runner. macos-13 and
+          # macos-14 are retired, and jobs for those labels queue until cancelled.
           - os: macos
-            runner: macos-14
+            runner: macos-15
             target: x86_64-apple-darwin
             artifact: eindir-core-macos-x86_64
             static_lib: libeindir_core.a
@@ -113,9 +113,9 @@ jobs:
             target: x86_64
           - os: ubuntu-22.04
             target: aarch64
-          - os: macos-14
+          - os: macos-15
             target: x86_64
-          - os: macos-14
+          - os: macos-15
             target: aarch64
     steps:
       - uses: actions/checkout@v6
