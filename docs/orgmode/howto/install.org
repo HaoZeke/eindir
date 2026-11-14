@@ -6,7 +6,7 @@
 pip install eindir
 #+END_SRC
 
-Optional extras for array API interop, etc. are pulled on demand when =RGPYCRUMBS_AUTO_DEPS=1= (or equivalent) is set, or pre-install via pixi.
+The extras are =plotter= (matplotlib and cmcrameri) and =testing= (array-api-strict, pytest and pytest-cov), as in =pip install "eindir[plotter]"=.
 
 * Pixi (full stack, recommended for development + docs)
 #+BEGIN_SRC bash

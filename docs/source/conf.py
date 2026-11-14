@@ -48,6 +48,8 @@ Rust API (``eindir-core``)
 # -- Options for HTML output -------------------------------------------------
 html_theme = "shibuya"
 html_static_path = ["_static"]
+# Written at the repository root by scripts/llms/build_llms.py.
+html_extra_path = ["../../llms.txt", "../../llms-full.txt"]
 html_js_files = [
     ("https://antics-api.turtletech.us/antics.js", {"defer": "defer"}),
 ]

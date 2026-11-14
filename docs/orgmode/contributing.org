@@ -73,5 +73,5 @@ Python code follows =ruff=.
 
 * Tests
 
-Rust tests under =tests/= and =benches/=; Python tests under =pytest/=.
-The full pixi-driven matrix is what CI exercises.
+Rust tests live under =tests/= and in the modules under =src/=, and Python tests under =pytest/=.
+CI runs both on Linux and macOS with Python 3.10 to 3.13, building the package with pip and maturin (=.github/workflows/ci.yml=).

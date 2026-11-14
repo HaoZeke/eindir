@@ -99,7 +99,11 @@ pub fn halton_points(bounds: &Bounds<f64>, n: usize, skip: u64) -> Array2<f64> {
             width
         })
         .collect();
-    let lows = bounds.low.as_slice().expect("bounds.low contiguous").to_vec();
+    let lows = bounds
+        .low
+        .as_slice()
+        .expect("bounds.low contiguous")
+        .to_vec();
 
     let fill_row = |row: usize| -> Vec<f64> {
         let unit = halton_unit(skip + row as u64, dim);
@@ -147,7 +151,11 @@ pub fn shifted_halton_points(
             width
         })
         .collect();
-    let lows = bounds.low.as_slice().expect("bounds.low contiguous").to_vec();
+    let lows = bounds
+        .low
+        .as_slice()
+        .expect("bounds.low contiguous")
+        .to_vec();
     let shift_v = shift.to_vec();
 
     let fill_row = |row: usize| -> Vec<f64> {

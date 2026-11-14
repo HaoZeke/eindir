@@ -22,9 +22,7 @@ The Rust crate produces three artefacts:
 
 * Bindings
 
-- *Python.
-* =eindir._core= is the Rust extension; the user-facing package =eindir= re-exports both Rust types and pure-Python helpers from a mixed-mode maturin layout.
-- *C.
-* =cargo-c= produces =eindir-core.h= and =libeindir_core.{a,so}= with =pkg-config= integration via =eindir-core.pc=.
-- *C++.
-* The generated =eindir-core.h= is usable directly from C++; the hand-written =include/eindir-core.hpp= adds helpers in =namespace eindir=.
+- *Python.* =eindir._core= is the Rust extension, and the user-facing package =eindir= re-exports both Rust types and pure-Python helpers from a mixed-mode maturin layout.
+- *C.* =cargo-c= produces =eindir-core.h= and =libeindir_core.{a,so}= with =pkg-config= integration via =eindir-core.pc=.
+- *C++.*
+  The generated =eindir-core.h= is usable directly from C++, and the hand-written =include/eindir-core.hpp= adds helpers in =namespace eindir=.

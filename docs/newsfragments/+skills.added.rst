@@ -1,0 +1,2 @@
+Task guides under ``skills/`` in the ``SKILL.md`` format: ``eindir-python`` for the Python package and the calls that fail, ``eindir-rust`` for objectives, gradients, the generalized Langevin equation thermostat and surrogates, ``eindir-c-abi`` for building against eindir and writing objectives in C and C++, and ``eindir-contributing`` for preparing a change.
+Each comes with scripts that run what it describes, and ``scripts/skills/run_skills.py`` checks and runs them all.

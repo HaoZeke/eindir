@@ -459,7 +459,10 @@ mod tests {
             .unwrap();
         let y = Array1::from_iter(x.column(0).iter().map(|&v| v * v));
         let surrogate = AdditiveSurrogate::fit(x.view(), y.view(), bounds, 2);
-        assert_eq!(surrogate.gradient(Array1::from_vec(vec![2.0]).view())[0], 0.0);
+        assert_eq!(
+            surrogate.gradient(Array1::from_vec(vec![2.0]).view())[0],
+            0.0
+        );
     }
 
     #[test]

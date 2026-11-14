@@ -257,6 +257,11 @@ pub extern "C" fn eindir_core_abi_stamp() -> eindir_abi_stamp_t {
 }
 
 /// Returns nonzero when `stamp` can be consumed by this eindir ABI.
+///
+/// # Safety
+///
+/// `stamp` must be null or point to a readable [`eindir_abi_stamp_t`] for the
+/// duration of the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn eindir_core_abi_compatible(stamp: *const eindir_abi_stamp_t) -> i32 {
     if stamp.is_null() {
@@ -275,6 +280,11 @@ pub unsafe extern "C" fn eindir_core_abi_compatible(stamp: *const eindir_abi_sta
 }
 
 /// Return the semantic descriptor attached to an objective, or NULL.
+///
+/// # Safety
+///
+/// `obj` must be null or point to a live [`eindir_objective_t`]. The returned
+/// pointer aliases that objective's descriptor and is not freed here.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn eindir_objective_descriptor(
     obj: *const eindir_objective_t,
@@ -293,7 +303,8 @@ fn descriptor_string_equal(left: *const c_char, right: *const c_char) -> bool {
 }
 
 fn required_string_matches(actual: *const c_char, required: *const c_char) -> bool {
-    required.is_null() || unsafe { CStr::from_ptr(required).to_bytes().is_empty() }
+    required.is_null()
+        || unsafe { CStr::from_ptr(required).to_bytes().is_empty() }
         || descriptor_string_equal(actual, required)
 }
 
@@ -302,6 +313,12 @@ fn required_string_matches(actual: *const c_char, required: *const c_char) -> bo
 /// A non-empty string or nonzero scalar in `required` is exact; an empty or
 /// zero field acts as a wildcard. Operation bits are checked as a subset so a
 /// producer may advertise additional capabilities without breaking consumers.
+///
+/// # Safety
+///
+/// `actual` and `required` must each be null or point to a readable
+/// [`eindir_objective_descriptor_t`]. Every non-null string field must be a
+/// readable NUL-terminated string for the duration of the call.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn eindir_objective_descriptor_compatible(
     actual: *const eindir_objective_descriptor_t,
@@ -828,8 +845,7 @@ mod tests {
             energy_unit: energy.as_ptr().cast(),
             energy_sign: 1,
             gradient_sign: 1,
-            operations: EINDIR_OBJECTIVE_OPERATION_ENERGY
-                | EINDIR_OBJECTIVE_OPERATION_FORCES,
+            operations: EINDIR_OBJECTIVE_OPERATION_ENERGY | EINDIR_OBJECTIVE_OPERATION_FORCES,
             tensor_device_type: EINDIR_TENSOR_DEVICE_CPU,
             tensor_dtype_code: EINDIR_TENSOR_DTYPE_FLOAT,
             tensor_dtype_bits: 64,
@@ -843,7 +859,7 @@ mod tests {
             unsafe { eindir_objective_descriptor_compatible(&actual, &required) },
             1
         );
-        required.energy_unit = b"hartree\0".as_ptr().cast();
+        required.energy_unit = c"hartree".as_ptr();
         assert_eq!(
             unsafe { eindir_objective_descriptor_compatible(&actual, &required) },
             0

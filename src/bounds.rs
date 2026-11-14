@@ -34,11 +34,7 @@ where
         let dims = low.len();
         assert_eq!(low.len(), high.len(), "low and high have different shapes");
         assert!(slack >= T::zero(), "slack must be non-negative");
-        if let Some(index) = low
-            .iter()
-            .zip(high.iter())
-            .position(|(&lo, &hi)| lo > hi)
-        {
+        if let Some(index) = low.iter().zip(high.iter()).position(|(&lo, &hi)| lo > hi) {
             panic!(
                 "low[{index}] must be strictly less than high[{index}]: low must not exceed high in any coordinate"
             );
@@ -56,7 +52,7 @@ where
         x.len() == self.dims
             && x.iter()
                 .enumerate()
-            .all(|(i, &xi)| xi >= self.low[i] - self.slack && xi <= self.high[i] + self.slack)
+                .all(|(i, &xi)| xi >= self.low[i] - self.slack && xi <= self.high[i] + self.slack)
     }
 
     /// Draws a uniform random point inside the box.
