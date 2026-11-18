@@ -22,6 +22,9 @@
 //! `\\`, and each invalid UTF-8 byte is escaped visibly as `\xhh` in
 //! lowercase hexadecimal. Because literal backslashes are doubled, the
 //! original byte sequence up to the first NUL is unambiguously recoverable.
+//! A callback writes its bytes as they are and does not double anything.
+//! When `message_out` is too small the message is cut between these units, so
+//! it never ends in half of a `\\` or a `\xhh`.
 
 use std::ffi::{c_char, c_void};
 
@@ -50,6 +53,10 @@ pub const EINDIR_TRY_MESSAGE_CAP: usize = 256;
 /// write a NUL-terminated message of at most `message_cap - 1` bytes to
 /// `message_out`. `message_out` is never NULL and `message_cap` is
 /// [`EINDIR_TRY_MESSAGE_CAP`] when eindir calls it.
+///
+/// The callback writes raw bytes. eindir reads them up to the first NUL and
+/// escapes them when it reports the message, so a literal backslash is
+/// written as one `\` and the callback does not double it.
 pub type EindirTryEvalFn = unsafe extern "C" fn(
     user_data: *mut c_void,
     x: *const DLManagedTensorVersioned,
@@ -166,16 +173,49 @@ where
     }
 }
 
-/// Copy `message` into the caller's buffer, truncated on a UTF-8 boundary to
-/// fit with its NUL.
+/// Byte length of the unit at the start of `rest`, which is never empty.
+///
+/// A unit is one escape produced by [`decode_message`], either `\\` or
+/// `\xhh` with lowercase hexadecimal digits, or else one `char`.
+fn unit_len(rest: &str) -> usize {
+    let bytes = rest.as_bytes();
+    if bytes[0] == b'\\' {
+        match bytes.get(1) {
+            Some(b'\\') => return 2,
+            Some(b'x')
+                if bytes
+                    .get(2..4)
+                    .is_some_and(|hex| hex.iter().all(is_lower_hex)) =>
+            {
+                return 4;
+            }
+            _ => {}
+        }
+    }
+    rest.chars().next().map_or(1, char::len_utf8)
+}
+
+fn is_lower_hex(byte: &u8) -> bool {
+    matches!(byte, b'0'..=b'9' | b'a'..=b'f')
+}
+
+/// Copy `message` into the caller's buffer, truncated to fit with its NUL.
+///
+/// The cut falls between units, so the written message never ends inside
+/// a UTF-8 sequence or a `\\` or `\xhh` escape.
 fn write_message(out: *mut c_char, cap: usize, message: &str) {
     if out.is_null() || cap == 0 {
         return;
     }
     let bytes = message.as_bytes();
-    let mut n = bytes.len().min(cap - 1);
-    while n > 0 && !message.is_char_boundary(n) {
-        n -= 1;
+    let limit = cap - 1;
+    let mut n = 0;
+    while n < bytes.len() {
+        let width = unit_len(&message[n..]);
+        if n + width > limit {
+            break;
+        }
+        n += width;
     }
     unsafe {
         std::ptr::copy_nonoverlapping(bytes.as_ptr().cast::<c_char>(), out, n);
@@ -408,7 +448,9 @@ pub unsafe extern "C" fn eindir_try_objective_has_grad(obj: *const eindir_try_ob
 /// `message_out` (when it is not NULL and `message_cap` is not 0, truncated
 /// to fit with its NUL) and also recorded for `eindir_last_error()`. Any
 /// non-UTF-8 bytes written by the callback are escaped visibly as `\xhh` with
-/// backslashes doubled as `\\` so no byte information is lost. On success
+/// backslashes doubled as `\\` so no byte information is lost. Truncation
+/// never ends the message inside a UTF-8 sequence, a `\xhh` or a `\\`, so
+/// it can stop up to three bytes short of `message_cap - 1`. On success
 /// `message_out` is set to the empty string.
 ///
 /// # Safety
@@ -1021,5 +1063,108 @@ mod tests {
             .to_str()
             .expect("truncated buffer must stay valid UTF-8");
         assert_eq!(written, "caf");
+    }
+
+    const SENTINEL: c_char = 0x7f;
+
+    fn written_bytes(message: &str, cap: usize) -> Vec<u8> {
+        let mut buf = vec![SENTINEL; cap + 2];
+        write_message(buf.as_mut_ptr(), cap, message);
+        let nul = buf
+            .iter()
+            .position(|&c| c == 0)
+            .expect("the message is NUL terminated");
+        assert!(nul < cap, "NUL at {nul} lies outside a buffer of {cap}");
+        assert!(
+            buf[nul + 1..].iter().all(|&c| c == SENTINEL),
+            "bytes after the NUL were touched"
+        );
+        buf[..nul].iter().map(|&c| c as u8).collect()
+    }
+
+    #[test]
+    fn truncation_never_splits_a_hex_escape() {
+        let message = decode_message(b"ab\xff cd");
+        assert_eq!(message, "ab\\xff cd");
+        for cap in [4, 5, 6] {
+            assert_eq!(written_bytes(&message, cap), b"ab", "cap {cap}");
+        }
+        assert_eq!(written_bytes(&message, 3), b"ab");
+    }
+
+    #[test]
+    fn truncation_never_splits_a_doubled_backslash() {
+        let message = decode_message(b"ab\\cd");
+        assert_eq!(message, "ab\\\\cd");
+        assert_eq!(written_bytes(&message, 4), b"ab");
+        assert_eq!(written_bytes(&message, 3), b"ab");
+    }
+
+    #[test]
+    fn truncation_keeps_an_escape_that_fits_exactly() {
+        let hex = decode_message(b"ab\xff cd");
+        assert_eq!(written_bytes(&hex, 7), b"ab\\xff");
+        assert_eq!(written_bytes(&hex, 8), b"ab\\xff ");
+
+        let slash = decode_message(b"ab\\cd");
+        assert_eq!(written_bytes(&slash, 5), b"ab\\\\");
+        assert_eq!(written_bytes(&slash, 6), b"ab\\\\c");
+
+        assert_eq!(written_bytes("\\xff", 5), b"\\xff");
+        assert_eq!(written_bytes("\\xff", 4), b"");
+        assert_eq!(written_bytes("\\\\", 3), b"\\\\");
+        assert_eq!(written_bytes("\\\\", 2), b"");
+    }
+
+    #[test]
+    fn truncation_at_every_cap_ends_on_an_escape_boundary() {
+        let raw: &[u8] = b"a\\b \xff\xfe\\\\ caf\xc3\xa9 \x80\\x41\\";
+        let message = decode_message(raw);
+        for cap in 1..=message.len() + 2 {
+            let bytes = written_bytes(&message, cap);
+            assert!(bytes.len() < cap, "cap {cap}");
+            assert!(message.as_bytes().starts_with(&bytes), "cap {cap}");
+            let text = std::str::from_utf8(&bytes).expect("valid UTF-8");
+            assert!(raw.starts_with(&unescape_message(text)), "cap {cap}");
+            let unit = message
+                .get(bytes.len()..)
+                .filter(|rest| !rest.is_empty())
+                .map(unit_len);
+            if let Some(unit) = unit {
+                assert!(bytes.len() + unit > cap - 1, "cap {cap} stopped early");
+            }
+        }
+        assert_eq!(
+            written_bytes(&message, message.len() + 1),
+            message.as_bytes()
+        );
+    }
+
+    #[test]
+    fn eval_truncates_the_buffer_message_on_an_escape_boundary() {
+        let obj = make(raw_bytes_eval, Some(raw_bytes_grad), 2);
+        let mut x = [1.0, 2.0];
+        let x_t = unsafe { create_borrowed_f64_1d(x.as_mut_ptr(), 2) };
+        let mut buf = [0 as c_char; 8];
+        let mut value = 0.0;
+
+        let status =
+            unsafe { eindir_try_objective_eval(obj, x_t, &mut value, buf.as_mut_ptr(), 8) };
+        assert_eq!(status, REFUSED);
+        let out_bytes = unsafe { CStr::from_ptr(buf.as_ptr()) }.to_bytes();
+        assert_eq!(out_bytes, b"bad ");
+        let last_bytes = unsafe { CStr::from_ptr(crate::ffi::eindir_last_error()) }.to_bytes();
+        assert_eq!(last_bytes, b"bad \\xff\\xfe byte");
+
+        let status =
+            unsafe { eindir_try_objective_eval(obj, x_t, &mut value, buf.as_mut_ptr(), 9) };
+        assert_eq!(status, REFUSED);
+        let out_bytes = unsafe { CStr::from_ptr(buf.as_ptr()) }.to_bytes();
+        assert_eq!(out_bytes, b"bad \\xff");
+
+        unsafe {
+            tensor_free(x_t);
+            eindir_try_objective_free(obj);
+        }
     }
 }
