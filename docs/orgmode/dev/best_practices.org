@@ -1,28 +1,28 @@
 #+TITLE: Best Practices
-#+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
+#+OPTIONS: toc:nil todo:nil num:nil author:nil ^:nil
 
-* Reuse the same Objective
-Define (or wrap) your f once.
-Pass the identical object to pilots, mixer, GLE, surrogates, polish, and anneal drivers.
-This is the source of the "one change serves all" property.
+* Define the objective once
 
-* Prefer QMC starts when bounds are known
-=low_discrepancy_points= (with a stable skip) gives better coverage and reproducibility than random for the same budget.
-Use it for mixer chains, pilots, and polish.
+Write the function once, as an =Objective= in Rust, a =PyObjective= in Python or an =eindir_objective_t= in C, and pass the same object to every driver.
+Comparisons between drivers then differ only in the driver.
 
-* GLE drift is reusable
-Fit (or use the default optimal-sampling) drift once; the same matrix can be used at any temperature / with any driver that accepts a GLE Move.
-Correctness is controlled by the covariance C you pass to sample_stationary; acceleration by the drift A.
+* Use low-discrepancy starts
 
-* Surrogates as first-class citizens
-An additive or Chebyshev surrogate can be treated as an Obj (cheap value) or as a Move (independence proposal).
-The Metropolis correction reports the best value against the true objective.
-Charge the pilot cost to the budget; the collapse never enters the accuracy accounting.
+When the bounds are known, =low_discrepancy_points= with a fixed =skip= gives starts that cover the box and are the same on every run.
+Use =shifted_low_discrepancy_points= with different seeds for independent replicas.
 
-* Python array API + DLPack
-When using device backends (via anneal), keep everything in the namespace supplied by the bounds array.
-Pass DLPack tensors for zero-copy handoff to other runtimes.
+* Reuse the GLE drift
 
-* Test with the laws checker (when using via anneal)
-The =SaVariant= / =checked_with_sweep= in anneal will catch neighbourhood or acceptance-law violations early.
-Write your custom Obj/Neigh/Move/Accept so they satisfy L1-L4; the primitives here are already designed to do so.
+The drift matrix sets the speed of the thermostat and the covariance sets its temperature, so one drift serves every temperature.
+Build it once with =optimal_sampling_drift= and rebuild the =GleThermostat= only when =dt= changes.
+
+* Accept surrogate proposals with the true objective
+
+A surrogate is cheap but approximate.
+Use its proposals and values to decide where to look, and decide what to keep, and what to report, with the true objective.
+Count the pilot evaluations that fitted the surrogate in the evaluation budget.
+
+* Keep arrays where they live
+
+With device arrays, =eindir.to_reference= and =eindir.require_same_placement= keep every array in the namespace and on the device of a reference array, and =dlpack_device= reads where an array lives without converting it.
+=eindir._core= itself takes only NumPy float64 arrays on the CPU.

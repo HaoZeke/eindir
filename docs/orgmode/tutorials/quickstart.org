@@ -5,52 +5,92 @@
 ==============================
 Quickstart with Python
 ==============================
-
-This tutorial shows the core workflow: define or wrap an objective, generate
-low-discrepancy starts, and evaluate. All primitives are the same ones
-consumed by =anneal=.
 #+end_export
 
-* Prerequisites
+This tutorial wraps a Python function and its gradient as an objective, draws start points inside its bounds, and evaluates them.
+It needs =pip install eindir= and NumPy.
 
-#+begin_src bash
-pip install "eindir[all]"
-#+end_src
+* Step 1: an objective with a gradient
 
-* Step 1: Define a Python objective (or use builtin)
+=_core.Bounds(low, high, slack=1e-6)= is the box.
+=_core.PyObjective(fn, bounds, grad_fn=None)= wraps =fn=, which takes a 1-D float64 array and returns a float.
+=grad_fn=, when given, returns the gradient as an array of the same length.
 
-#+begin_src python
+#+BEGIN_SRC python
 import numpy as np
-from eindir import Objective, Bounds, low_discrepancy_points
+from eindir import _core
 
-class Rastrigin2D(Objective):
-    def __init__(self):
-        low = np.full(2, -5.12)
-        high = np.full(2, 5.12)
-        super().__init__(Bounds(low, high, 0.0))
+low = np.full(2, -5.12)
+high = np.full(2, 5.12)
 
-    def eval(self, x):
-        x = np.asarray(x, dtype=np.float64)
-        return float(10.0 * len(x) + np.sum(x**2 - 10.0 * np.cos(2.0 * np.pi * x)))
 
-obj = Rastrigin2D()
-#+end_src
+def rastrigin(x):
+    return float(10.0 * len(x) + np.sum(x**2 - 10.0 * np.cos(2.0 * np.pi * x)))
 
-* Step 2: Low-discrepancy initialisation
 
-#+begin_src python
-starts = low_discrepancy_points(obj.bounds.low, obj.bounds.high, 8, skip=1)
-print("8 starts:\n", starts)
+def rastrigin_grad(x):
+    return 2.0 * x + 20.0 * np.pi * np.sin(2.0 * np.pi * x)
 
-vals = [obj.eval(s) for s in starts]
-print("Values at starts:", vals)
-#+end_src
 
-* Step 3: Use with GLE or surrogates (see other tutorials)
+obj = _core.PyObjective(rastrigin, _core.Bounds(low, high), grad_fn=rastrigin_grad)
+print(obj.dim, obj.eval(np.zeros(2)), obj.grad(np.array([0.5, 0.0])))
+#+END_SRC
 
-The same =obj= (or any class implementing the =Objective= protocol) can be passed to =anneal.gle_langevin=, surrogate fitting, QMC polish, etc.
+Without =grad_fn=, =obj.grad= raises =ValueError=.
+Python has no finite-difference fallback, so pass a gradient or difference the function yourself.
 
-See:
-- [[file:gle-thermostat.org][GLE thermostat tutorial]]
-- [[file:surrogates.org][Surrogates tutorial]]
-- [[file:../howto/using-with-anneal.org][Using with anneal]] for the typed SA algebra.
+* Step 2: start points
+
+=eindir.low_discrepancy_points(low, high, n, skip=1)= returns =n= Halton points in the box.
+The same arguments always give the same points, so a run can be repeated exactly.
+
+#+BEGIN_SRC python
+import numpy as np
+import eindir
+from eindir import _core
+
+low = np.full(2, -5.12)
+high = np.full(2, 5.12)
+obj = _core.PyObjective(
+    lambda x: float(20.0 + np.sum(x**2 - 10.0 * np.cos(2.0 * np.pi * x))),
+    _core.Bounds(low, high),
+)
+
+starts = eindir.low_discrepancy_points(low, high, 8)
+values = np.array([obj.eval(row) for row in starts])
+print(starts.shape, values.min())
+assert np.all((starts >= low) & (starts <= high))
+#+END_SRC
+
+* Step 3: the pure-Python classes
+
+=eindir.NumLimit= and =eindir.ObjectiveFunction= are plain Python and separate from =_core=.
+A subclass of =ObjectiveFunction= implements =singlepoint=, =multipoint= and =__repr__=; calling it counts calls in =.calls=.
+
+#+BEGIN_SRC python
+import numpy as np
+import eindir
+
+
+class Sphere(eindir.ObjectiveFunction):
+    def singlepoint(self, pos):
+        return float(np.sum(pos**2))
+
+    def multipoint(self, pos):
+        return np.sum(pos**2, axis=-1)
+
+    def __repr__(self):
+        return "Sphere"
+
+
+limits = eindir.NumLimit(low=np.full(2, -1.0), high=np.full(2, 1.0), dims=2)
+f = Sphere(limits)
+print(f(np.array([0.5, 0.5])), f(np.array([[1.0, 0.0], [0.0, 0.0]])), f.calls)
+#+END_SRC
+
+Pass =dims= to =NumLimit=: it defaults to 1, and =ObjectiveFunction= uses it to tell one point from many.
+
+* Where to go next
+
+The GLE thermostat, the surrogates and the gradient adapters are Rust-only; see [[file:gle-thermostat.org][GLE thermostat]] and [[file:surrogates.org][Surrogates]].
+[[file:../howto/using-with-anneal.org][Using with anneal]] shows where these objects go in the anneal drivers.

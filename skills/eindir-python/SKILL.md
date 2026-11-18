@@ -17,7 +17,7 @@ The Python surface is two modules:
 | `eindir._core` (Rust) | `Bounds`, `PyObjective`, `FPair`, `low_discrepancy_points`, `shifted_low_discrepancy_points`, `__version__` |
 
 The rest of the crate has no Python binding: `GleThermostat`, `optimal_sampling_drift`, `matrix_exp`, `ldl_sqrt`, `halton_unit`, `AdditiveSurrogate`, `ChebyshevSurrogate`, `ReducedObjective`, the `Objective` trait, `FiniteDiffGradient`, `AnalyticGradient` and the builtin objective types (`Rastrigin`, `Rosenbrock`, `Ackley`, `StybTang2D`).
-The manual's Quickstart and its Python quickstart, low-discrepancy, GLE and surrogate tutorials import some of these from `eindir`, so those examples stop with ImportError.
+Older copies of the manual import some of these from `eindir`, and those examples stop with ImportError.
 For the GLE thermostat and the surrogates, write Rust (the `eindir-rust` skill).
 
 `scripts/surface.py` checks this table against the installed package.

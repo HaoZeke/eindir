@@ -1,12 +1,50 @@
 #+TITLE: Gradients
-#+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
+#+OPTIONS: toc:nil todo:nil num:nil author:nil ^:nil
 
-Many drivers (GLE-Langevin, HMC, some surrogates) benefit from or require gradients.
+Gradient-based drivers such as the GLE Langevin driver and local polish in anneal take a type that implements =Gradient<f64>=, usually through =DifferentiableObjective<f64>=.
+This page shows how to provide one from Rust, from Python and from C.
 
-* Supplying a gradient
+* Rust
 
-- Implement =grad(self, x)= on your Objective subclass (returns ndarray).
-- Or wrap a Python callable + grad callable with the binding helpers.
-- When no gradient is available, finite differences are used (n_p+1 cost per gradient evaluation) and charged against the budget.
+There are four routes, from most to least work:
 
-See the GLE and HMC tutorials in anneal for end-to-end usage.
+- Implement =Gradient<f64>= on the objective type and add =impl DifferentiableObjective<f64> for T {}=.
+  There is no blanket impl, so the empty impl is required; override =value_and_gradient= when the value and gradient share work.
+- Wrap a gradient closure in =AnalyticGradient::new(dim, grad_fn)=.
+- Write the function once over dual numbers and wrap it in =ForwardAd= (feature =autodiff=; the field uses the =num-dual= crate).
+  =ForwardAd= implements =Objective=, =Gradient= and =DifferentiableObjective=, with exact partial derivatives from one evaluation.
+- Wrap any objective in =FiniteDiffGradient::new(obj)=.
+  It uses central differences with an absolute step =h = 1e-5= (=with_step= changes it), so one gradient costs =2 * dim= evaluations, and the stencil can step up to =h= outside the bounds.
+  It implements =Gradient= only.
+
+#+INCLUDE: "../../../examples/gradients.rs" src rust
+
+On a type that implements both =Objective= and =Gradient=, =x.dim()= is ambiguous (error E0034); write =Objective::dim(&x)=.
+
+Nothing in eindir adds a finite-difference gradient for you: a driver that needs a gradient will not compile against an objective without one.
+
+* Python
+
+Pass =grad_fn= to =PyObjective=:
+
+#+BEGIN_SRC python
+import numpy as np
+from eindir import _core
+
+bounds = _core.Bounds(np.full(2, -1.0), np.full(2, 1.0))
+obj = _core.PyObjective(
+    lambda x: float(np.sum(np.exp(x))),
+    bounds,
+    grad_fn=lambda x: np.exp(x),
+)
+print(obj.grad(np.array([0.0, 0.5])))
+#+END_SRC
+
+Without =grad_fn=, =obj.grad= raises =ValueError=; Python has no finite-difference fallback.
+If you have no gradient, difference the function yourself in =grad_fn=.
+
+* C
+
+Set =grad_fn= in =eindir_objective_new= and advertise =EINDIR_FEATURE_GRADIENT= in the descriptor.
+A NULL =grad_fn= makes =EindirObjectiveWrapper::grad= return zeros.
+[[file:c-objective.org][Objectives through the C ABI]] has a complete example.

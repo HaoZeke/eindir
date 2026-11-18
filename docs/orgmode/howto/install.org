@@ -1,21 +1,64 @@
 #+TITLE: Installation
-#+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
+#+OPTIONS: toc:nil todo:nil num:nil author:nil ^:nil
 
-* Python
+* Python from PyPI
+
 #+BEGIN_SRC bash
 pip install eindir
 #+END_SRC
 
+The wheel is abi3 and needs Python 3.10 or newer.
 The extras are =plotter= (matplotlib and cmcrameri) and =testing= (array-api-strict, pytest and pytest-cov), as in =pip install "eindir[plotter]"=.
+There is no =all= extra.
 
-* Pixi (full stack, recommended for development + docs)
-#+BEGIN_SRC bash
-pixi install
+The newest release on PyPI is 0.5.1, which predates the bounds checks, the docstrings and several of the functions on these pages.
+Run =pip index versions eindir= to see what is released, and build from source for the main branch.
+
+* Rust from crates.io
+
+#+BEGIN_SRC toml
+[dependencies]
+eindir-core = "0.6"
 #+END_SRC
 
-* From source (Rust + Python)
+The crate needs Rust 1.88 or newer (edition 2024).
+Its optional features are =autodiff= (forward-mode gradients), =capi= (the C ABI), =python= and =py-objective= (the Python extension).
+=cargo info eindir-core= shows the newest release; for the main branch use a git dependency:
+
+#+BEGIN_SRC toml
+[dependencies]
+eindir-core = { git = "https://github.com/HaoZeke/eindir" }
+#+END_SRC
+
+* Python from source
+
+In a virtual environment with Rust 1.88 or newer:
+
 #+BEGIN_SRC bash
-cargo build --release
-cargo cinstall --release --prefix /usr/local   # for C/C++ consumers
-# Python: maturin develop --features python (or pixi run -e python python-build)
+python -m pip install "maturin>=1.5,<2" numpy
+maturin develop --features python
+python -c "import eindir; print(eindir._core.__version__)"
+#+END_SRC
+
+* C and C++ from source
+
+The C library, its header =eindir-core.h= and =eindir-core.pc= come from cargo-c 0.10.17 or newer:
+
+#+BEGIN_SRC bash
+cargo install cargo-c
+cargo cinstall --release --prefix="$HOME/.local" --libdir=lib
+#+END_SRC
+
+The header includes =dlpack/dlpack.h= and needs the DLPack 1.0 headers; distribution packages may ship an older version without =DLManagedTensorVersioned=.
+Link against the installed prefix, not =target/=: the library's soname names a file that only =cinstall= creates.
+[[file:../bindings.org][Bindings]] has the Meson and CMake snippets.
+
+* Pixi
+
+[[https://pixi.sh][pixi]] supplies Rust, Python, maturin and the documentation tools in three environments:
+
+#+BEGIN_SRC bash
+pixi install
+pixi run -e python python-test   # build the extension and run pytest
+pixi run -e docs docbld          # build this manual into docs/build
 #+END_SRC

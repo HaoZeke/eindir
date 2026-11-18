@@ -1,0 +1,115 @@
+#+TITLE: Objectives through the C ABI
+#+OPTIONS: toc:nil todo:nil num:nil author:nil ^:nil
+
+This page writes an objective in C, checks that the library it runs against is compatible, and hands the objective to Rust code.
+[[file:../explanation/c-abi.org][The C ABI]] explains the design and [[file:../reference/c-api.org][C API]] lists every function.
+
+* Install the library and the DLPack headers
+
+#+BEGIN_SRC bash
+cargo install cargo-c
+cargo cinstall --release --prefix="$HOME/.local" --libdir=lib
+#+END_SRC
+
+=eindir-core.h= includes =dlpack/dlpack.h=, which must be DLPack 1.0 or newer.
+Ubuntu's =libdlpack-dev= is 0.6 and lacks =DLManagedTensorVersioned=, so fetch the headers of the [[https://github.com/dmlc/dlpack/releases/tag/v1.0][v1.0 release]] instead.
+
+Build and link against the installed prefix:
+
+#+BEGIN_SRC bash
+export PKG_CONFIG_PATH="$HOME/.local/lib/pkgconfig"
+cc -std=c99 -Wall -I/path/to/dlpack/include objective_demo.c \
+  $(pkg-config --cflags --libs eindir-core) -Wl,-rpath,"$HOME/.local/lib" -o objective_demo
+#+END_SRC
+
+Linking against =target/= after =cargo cbuild= gives a program that does not start, because the soname, for example =libeindir_core.so.0.8=, names a file only =cinstall= creates.
+
+* Check the library at startup
+
+Compare the library's ABI stamp with the one your code was built against before using any handle:
+
+#+BEGIN_SRC c
+const eindir_abi_stamp_t stamp = eindir_core_abi_stamp();
+if (!eindir_core_abi_compatible(&stamp) || stamp.dlpack_major != DLPACK_MAJOR_VERSION) {
+    /* refuse to run */
+}
+#+END_SRC
+
+=eindir_core_abi_compatible= returns 1 when the major ABI version, the handle layout and size, and the DLPack major version are equal and the library's minor versions and feature bits are at least those of the stamp.
+To use the fallible handle, also check =stamp.features & EINDIR_ABI_FEATURE_TRY_CALLBACKS=.
+
+* Write the callbacks
+
+A value callback has the type =EindirEvalFn= and a gradient callback =EindirGradFn=:
+
+#+BEGIN_SRC c
+enum eindir_status_t eval(void *user_data, const struct DLManagedTensorVersioned *x,
+                          double *value_out);
+enum eindir_status_t grad(void *user_data, const struct DLManagedTensorVersioned *x,
+                          struct DLManagedTensorVersioned *grad_out);
+#+END_SRC
+
+Return =EINDIR_SUCCESS= after writing the result, or =EINDIR_INVALID_PARAMETER= or =EINDIR_INTERNAL_ERROR=.
+eindir does not check the tensors it passes on from a caller, so a callback that can receive tensors from C code should check =ndim=, =shape=, =dtype=, the device and =strides= itself, as =is_f64_vector= does in the program below.
+Tensors built by the Rust wrapper are always contiguous 1-D CPU float64 vectors of length =dim=.
+
+* Create a handle
+
+=eindir_objective_new(dim, low, high, eval_fn, grad_fn, user_data, free_fn)= copies the bounds and returns a handle, or NULL with a message in =eindir_last_error()=.
+Pass NULL for =grad_fn= when there is no gradient.
+=eindir_objective_free= calls =free_fn(user_data)= when both are non-NULL, then frees the handle.
+
+To carry units and signs, embed =eindir_objective_t= as the first member of your own struct, fill its fields, and point =descriptor= at a static =eindir_objective_descriptor_t=.
+A consumer then checks it with =eindir_objective_descriptor_compatible(actual, required)=, where empty fields of =required= accept anything, except =schema_id=, which must be set and equal.
+Free an embedded handle with your own destructor, never with =eindir_objective_free=.
+
+* Report failures with a message
+
+The fallible handle =eindir_try_objective_t= takes callbacks that return an =int32_t= status and write a message into a buffer of =EINDIR_TRY_MESSAGE_CAP= (256) bytes:
+
+#+BEGIN_SRC c
+int32_t try_eval(void *user_data, const struct DLManagedTensorVersioned *x,
+                 double *value_out, char *message_out, uintptr_t message_cap);
+#+END_SRC
+
+Status 0 is success, 1 and 2 mean invalid parameter and internal error, and any other value is yours.
+=eindir_try_objective_eval= returns the status and copies the message into the caller's buffer and into =eindir_last_error()=.
+A message in plain UTF-8 without backslashes arrives unchanged; other bytes are escaped as the [[file:../reference/c-api.org][C API reference]] describes.
+
+* The complete program
+
+This program does all of the above and checks each result.
+CI builds and runs it, under valgrind when it is available.
+
+#+INCLUDE: "../../../skills/eindir-c-abi/assets/objective_demo.c" src c
+
+Its output:
+
+#+BEGIN_EXAMPLE
+eindir-core 0.8.0: ABI 1.2, objective layout 3, DLPack 1.0
+f(0) = 14, grad f(0) = [-2, -4, -6], 1 evaluation(s)
+wrong bounds length: eindir_objective_new: bounds_low length 2 != dim 3
+NULL objective: eindir_objective_eval: obj is NULL
+gradient without a callback: eindir_objective_grad: no gradient callback
+energy unit mismatch: eindir objective semantic descriptor mismatch
+fallible callback: status 7, message "geometry refused: x[0] = 11"
+all checks passed
+#+END_EXAMPLE
+
+* Use the objective from Rust
+
+A Rust driver that receives a handle pointer wraps it:
+
+- =EindirObjectiveWrapper::new(&*ptr)= implements =Objective<f64>=, =Gradient<f64>= and =DifferentiableObjective<f64>=.
+  A failing value callback becomes NaN; a missing gradient callback gives zeros and the status of the gradient callback is ignored.
+- =EindirTryObjectiveWrapper::new(&*ptr)= implements the fallible traits with =Error = CallbackError=, which holds the status and the message.
+  A missing gradient callback is an error with status 1.
+
+Both constructors are =unsafe=: =low= and =high= must point to =dim= doubles, and they panic when =low[i] > high[i]=.
+The wrappers copy the bounds once, with slack 0.
+
+* C++
+
+The C header compiles as C++.
+=include/eindir-core.hpp= adds only =eindir::version()=; there are no C++ classes for the handles.
+=skills/eindir-c-abi/assets/raii_demo.cpp= shows a =std::unique_ptr= with a custom deleter.

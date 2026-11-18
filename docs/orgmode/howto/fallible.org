@@ -1,0 +1,31 @@
+#+TITLE: Objectives that can fail
+#+OPTIONS: toc:nil todo:nil num:nil author:nil ^:nil
+
+This page writes an objective whose evaluation returns an error, passes the error through a generic driver unchanged, and turns it back into a NaN for code that expects the infallible traits.
+[[file:../explanation/fallible-objectives.org][Fallible objectives]] explains the traits.
+
+* Steps
+
+1. Pick an error type.
+   Any type works; eindir puts no bound on it.
+2. Write the objective as a =TryOracle::new(bounds, f)=, where =f= returns =Result<(value, gradient), E>=, or implement =TryObjective= and =TryGradient= on your own type with the same =E= for =Error= and =GradError=.
+   Do not implement =TryObjective= on a type that implements =Objective=; it already has one.
+3. Write the driver generic over =O: TryDifferentiableObjective<f64>= and return =O::Error= with =?=.
+   Infallible objectives such as =Rastrigin= pass through the same driver with =Error = Infallible=.
+4. Where code needs the infallible traits, wrap the objective in =NanOnError::new(inner, sink)=, which returns NaN and hands each error to =sink=, or in =PanicOnError::new(inner)= for tests.
+
+* The program
+
+#+INCLUDE: "../../../examples/fallible_objective.rs" src rust
+
+=cargo run --example fallible_objective= prints:
+
+#+BEGIN_EXAMPLE
+Rastrigin after one step: 0.7740
+logged: [Refused { x0: 4.5 }]
+#+END_EXAMPLE
+
+* From C
+
+A C objective that wants to say why it failed uses =eindir_try_objective_t= and returns a status with a message; in Rust, =EindirTryObjectiveWrapper= turns those into a =CallbackError { code, message }=.
+See [[file:c-objective.org][Objectives through the C ABI]].

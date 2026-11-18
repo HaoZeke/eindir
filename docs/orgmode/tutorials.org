@@ -1,42 +1,22 @@
 #+TITLE: Tutorials
 
-* Install
+The tutorials build up from the [[file:quickstart.org][Quickstart]].
+Each one runs as written: CI runs the Python blocks of the manual, and the Rust code is included from =examples/=, which =cargo test= builds.
 
-** Python (pip)
+| Tutorial                                                 | Language       | What it covers                                                   |
+|----------------------------------------------------------+----------------+------------------------------------------------------------------|
+| [[file:tutorials/quickstart.org][Quickstart with Python]]       | Python         | An objective with a gradient, start points, the pure-Python classes |
+| [[file:tutorials/low-discrepancy.org][Low-discrepancy points]]  | Python, Rust   | Halton designs, shifted replicas, corner-anchored designs        |
+| [[file:tutorials/gle-thermostat.org][GLE thermostat]]          | Rust           | The coloured-noise thermostat on its own                         |
+| [[file:tutorials/surrogates.org][Surrogates]]                  | Rust           | An additive surrogate, its proposals, a reduced objective        |
 
-#+BEGIN_SRC bash
-pip install eindir
-#+END_SRC
+The GLE thermostat and the surrogates have no Python binding.
 
-** Pixi (development)
-
-#+BEGIN_SRC bash
-pixi install
-pixi run -e python python-test
-#+END_SRC
-
-** From source (cargo)
-
-#+BEGIN_SRC bash
-cargo build --release
-cargo cinstall --release --prefix /usr/local
-#+END_SRC
-
-* Hello eindir
+To check the version of an installed package:
 
 #+BEGIN_SRC python
 import eindir
 print(eindir._core.__version__)
 #+END_SRC
 
-* Bounds and FPair
-
-The =FPair= and =NumLimit= primitives expose bounds and objective metadata for Python callers.
-The Rust crate also exports typed bounds, objective, gradient, surrogate, and GLE thermostat primitives consumed by =anneal=.
-
-#+BEGIN_SRC python
-import numpy as np
-from eindir.core.components import NumLimit
-b = NumLimit(low=np.array([-1., -1.]), high=np.array([1., 1.]), dims=2)
-print(b.mkpoint())
-#+END_SRC
+=eindir.__version__= does not exist.

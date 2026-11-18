@@ -1,37 +1,60 @@
-#+TITLE: GLE Mechanics
-#+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
+#+TITLE: The GLE thermostat
+#+OPTIONS: toc:nil todo:nil num:nil author:nil ^:nil
 
-* What eindir Builds
+* The problem it solves
 
-The generalized Langevin equation (GLE) thermostat in =eindir= is a small linear stochastic system attached to each physical momentum.
-Instead of damping momentum with one scalar friction, it augments the state with auxiliary momenta.
-The augmented vector evolves under a drift matrix =A= and a noise covariance chosen so that the stationary covariance is the desired thermal covariance.
+Langevin dynamics samples the Boltzmann distribution by adding friction and noise to Hamiltonian dynamics.
+With white noise there is one friction constant =gamma=, and a harmonic mode of frequency =omega= decorrelates fastest near critical damping, when =gamma= is of order =omega=.
+An ill-conditioned objective has curvatures, and so frequencies, spread over orders of magnitude, and one =gamma= leaves most of them over- or under-damped.
 
-For a physical momentum =p= and auxiliary coordinates =s=, the thermostat acts on the stacked state =(p, s)=.
-The =GleThermostat= type stores the drift, timestep, temperature, and mass scaling needed by the BAB propagator used downstream in =anneal=.
-The supporting routines in =src/gle.rs= provide:
+The generalized Langevin equation (GLE) replaces the single friction by a memory kernel.
+Ceriotti, Bussi and Parrinello showed that a kernel built from a few auxiliary momenta, coupled linearly to the physical momentum, gives a Markovian system that can be integrated exactly and tuned so that the friction, and with it the sampling efficiency, is nearly flat over a chosen band of frequencies [1, 2].
 
-- =matrix_exp= for the small dense propagator, using Taylor expansion with scaling and squaring.
-- =ldl_sqrt= for a stable square root of the stationary covariance.
-- =sample_stationary= for drawing an initial extended momentum state from the invariant Gaussian.
-- =optimal_sampling_drift= for a fitted Ceriotti-Bussi-Parrinello optimal-sampling drift over a target frequency band.
+* What eindir computes
 
-* Correctness and Acceleration
+For each coordinate, the state is a vector =s= of =ns + 1= entries: the mass-scaled physical momentum in =s[0]= and =ns= auxiliary momenta.
+Its dynamics is the Ornstein-Uhlenbeck process =ds = -A s dt + B dW=, with drift matrix =A= and diffusion matrix =B=.
+The exact solution over one step =dt= is
 
-The important separation is between the covariance condition and the shape of the drift.
-The covariance fixes the invariant Boltzmann momentum distribution.
-The drift controls how quickly different local frequencies decorrelate.
+#+BEGIN_EXAMPLE
+s <- T s + S xi,   T = exp(-dt A),   S S^T = kb (C - T C T^T),
+#+END_EXAMPLE
 
-White-noise Langevin uses one friction scale, so it can only be close to critically damped near one frequency.
-The fitted GLE drift spreads friction across a band by coupling several damped oscillator pairs to the physical momentum.
-That makes the thermostat a better =Move= primitive for ill-conditioned objectives, while the Metropolis or trajectory-level accounting in =anneal= still evaluates the true objective.
+with =xi= standard normal and =C= the stationary covariance.
+=GleThermostat::new= computes =T= with =matrix_exp= (Taylor series with scaling and squaring) and =S= with =ldl_sqrt=, a pivoted LDL^T square root that tolerates the nearly singular matrix that small =dt= produces.
+These follow the =ThermoGLE= propagator of i-PI [3].
+Neither needs a linear-algebra library, because the matrices have only =ns + 1= rows.
 
-* Interface to anneal
+* Correctness from C, speed from A
 
-=anneal= consumes this machinery in its =gle_langevin= driver and in the paper's five-component algebra as a gradient-aware =Move= slot.
-The driver asks =eindir= for the drift matrix, builds the canonical thermostat, reseeds the auxiliary state from the stationary covariance, and advances the physical position with a BAB-style step.
-Objective values and accepted states remain owned by =anneal=; =eindir= supplies the reusable thermostat primitive.
+The stationary distribution of the process is =N(0, kb C)=, whatever the drift.
+Setting =C = temperature * I=, as =GleThermostat::canonical= does, makes the physical momentum Boltzmann-distributed for any valid =A=.
+The drift only decides how fast each frequency decorrelates.
+This is the decoupling of correctness from efficiency that Ceriotti, Bussi and Parrinello call colored-noise thermostats "à la carte" [2], and it is why one drift matrix can be reused at every temperature.
 
-This division matters for the implementation.
-The same drift and covariance code can be used by the standalone GLE tutorial, by anneal's simulated-annealing driver, and by benchmark scripts that compare white-noise and colored-noise sampling.
-No driver needs a private copy of the matrix exponential, covariance square root, or fitted drift constants.
+* The optimal-sampling drift
+
+=optimal_sampling_drift(omega0)= returns a fitted =A= with six damped-oscillator baths, each a pair of auxiliary momenta with eigenvalues =-Gamma ± i Omega=, skew-coupled to the physical momentum.
+Spreading the bath frequencies over the band =[omega0, 100 omega0]= flattens the friction across it.
+The parameters were fitted to maximise the worst normalised sampling efficiency over the band, following the procedure of the GLE input generator at [[https://gle4md.org][gle4md.org]]; the fit lives in =experiments/colored_noise_sampling.py= of anneal.
+Since =A= has units of frequency, scaling the band only multiplies the matrix by =omega0=.
+
+The symmetric part =A + A^T= of this matrix is diagonal and non-negative, so with =C = I= the fluctuation-dissipation relation =A C + C A^T = B B^T= has a real solution =B=, and the canonical thermostat is valid.
+
+* Who uses it
+
+The GLE Langevin driver of [[https://github.com/HaoZeke/anneal][anneal]] builds the thermostat once, draws the initial auxiliary state with =sample_stationary=, and calls =step= between force kicks.
+The objective values and the accept decisions stay in anneal.
+
+* References
+
+The implementation and the fitted drift:
+
+- R. Goswami, eindir, Zenodo. [[https://doi.org/10.5281/zenodo.10672737][doi:10.5281/zenodo.10672737]]
+- R. Goswami, R. Goswami, A. Goswami, M. Sallermann, S. Goswami and D. Goswami, "anneal_repro: reproducibility harness for Typed Component Algebras for Simulated Annealing and Markov-Chain Monte Carlo", version 0.4.0, Zenodo (2026). [[https://doi.org/10.5281/zenodo.20672621][doi:10.5281/zenodo.20672621]]
+
+The method:
+
+1. M. Ceriotti, G. Bussi and M. Parrinello, "Langevin Equation with Colored Noise for Constant-Temperature Molecular Dynamics Simulations", Phys. Rev. Lett. 102, 020601 (2009). [[https://doi.org/10.1103/PhysRevLett.102.020601][doi:10.1103/PhysRevLett.102.020601]]
+2. M. Ceriotti, G. Bussi and M. Parrinello, "Colored-Noise Thermostats à la Carte", J. Chem. Theory Comput. 6, 1170-1180 (2010). [[https://doi.org/10.1021/ct900563s][doi:10.1021/ct900563s]]
+3. M. Ceriotti, J. More and D. E. Manolopoulos, "i-PI: A Python interface for ab initio path integral molecular dynamics simulations", Comput. Phys. Commun. 185, 1019-1026 (2014). [[https://doi.org/10.1016/j.cpc.2013.10.027][doi:10.1016/j.cpc.2013.10.027]]

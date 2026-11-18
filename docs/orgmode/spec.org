@@ -1,3 +1,0 @@
-#+TITLE: Specification
-
-The crate exposes typed objective, bounds, gradient, surrogate, and GLE thermostat primitives used by =anneal= and by the Python extension.

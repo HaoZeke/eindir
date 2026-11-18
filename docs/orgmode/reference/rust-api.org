@@ -1,18 +1,15 @@
 #+TITLE: Rust API Reference
-#+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
+#+OPTIONS: toc:nil todo:nil num:nil author:nil ^:nil
 
-* Rust API Reference
+The pages under this one are generated from the doc comments of the =eindir-core= crate by =sphinxcontrib_rust= and =sphinx-rustdoc-postprocess=.
+=cargo doc --all-features --open= builds the same documentation with rustdoc, including the =autodiff= and =capi= items, and [[https://docs.rs/eindir-core][docs.rs]] has it for each release.
 
-The =eindir-core= crate provides the Objective trait, bound handling, low-discrepancy generators, coloured-noise GLE thermostat machinery, surrogate models, reduced objectives, and the Rust surfaces behind the Python and C bindings.
-
-The API documentation below is generated from the crate source through =sphinxcontrib_rust= and =sphinx-rustdoc-postprocess=, then linked into this site under the same reference tree as the user-facing primitive summaries.
+Public items document their units, defaults, errors and panics where they have any, and many carry an example that =cargo test= runs.
 
 #+begin_export rst
 See also:
 
-- :doc:`API Primitives </reference/api-primitives>` for the stable Python-facing
-  concept list.
-- :doc:`Primitives </explanation/primitives>` for the design-level explanation.
-- `anneal documentation <https://anneal.rgoswami.me/>`__ for the
-  simulated-annealing drivers built on these primitives.
+- :doc:`Python API </reference/api-primitives>` for what Python has.
+- :doc:`C API </reference/c-api>` for the C functions and types.
+- :doc:`The primitives </explanation/primitives>` for how the pieces fit together.
 #+end_export

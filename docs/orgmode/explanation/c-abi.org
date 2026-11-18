@@ -1,0 +1,73 @@
+#+TITLE: The C ABI
+#+OPTIONS: toc:nil todo:nil num:nil author:nil ^:nil
+
+The C ABI lets code in any language that can call C hand an objective to Rust drivers, and lets C code evaluate objectives that eindir created.
+This page explains its parts and the choices behind them.
+[[file:../howto/c-objective.org][Objectives through the C ABI]] shows how to use it.
+
+* Two handles
+
+=eindir_objective_t= is a plain C struct: the dimension, pointers to the bounds, a value callback, an optional gradient callback, an opaque =user_data= pointer with an optional destructor, and an optional descriptor pointer.
+Because it is =#[repr(C)]= and holds no Rust types, a producer can put it first in a struct of its own and pass a pointer to that struct where a handle is expected; the cast costs nothing.
+A handle from =eindir_objective_new= owns copies of the bounds and is freed by =eindir_objective_free=.
+An embedded handle belongs to its producer, which frees it.
+
+Its callbacks return one of three =eindir_status_t= values and cannot say why they failed.
+=eindir_try_objective_t= is a second handle whose callbacks return an =int32_t= status and write a message into a buffer that eindir lends them.
+It is a separate type, not new fields on the first, because a larger =eindir_objective_t= would break every producer that embeds it.
+For the same reason the two must never be cast into each other: the fields line up, but the callback types differ.
+The fallible handle has no descriptor.
+
+* The ABI stamp
+
+=eindir_core_abi_stamp()= returns the library's =eindir_abi_stamp_t=: an ABI major and minor version, the layout revision of =eindir_objective_t= and its size and alignment, the DLPack version of the tensors, and feature bits.
+A consumer fills in the stamp it was built against and asks =eindir_core_abi_compatible= whether the loaded library can serve it.
+
+The rule is: equal major version, layout, size, alignment and DLPack major version; a minor ABI version and DLPack minor version no greater than the library's; and only feature bits the library has.
+A major version change means existing code may break; a minor change only adds.
+Size and alignment are in the stamp as well as the layout revision so that a mismatch between compilers or platforms is caught even when the revision agrees.
+
+The current library reports ABI 1.2, layout 3, DLPack 1.0 and the features =GRADIENT=, =BATCH= and =TRY_CALLBACKS=.
+ABI minor 2 added the fallible handle, so a consumer built against minor 1 still passes the check, and a consumer that wants the fallible handle checks =EINDIR_ABI_FEATURE_TRY_CALLBACKS=.
+
+* The descriptor
+
+The stamp says whether two binaries agree on memory layout; it says nothing about what an objective computes.
+An energy in hartree passed to code that expects eV runs without error and gives wrong answers.
+=eindir_objective_descriptor_t= carries that meaning: a schema identifier, a producer identifier, length and energy units, the signs of the energy and the gradient, the supported operations, and the tensor contract (device, dtype, layout and callback lifetime).
+
+eindir defines no schema of its own.
+Producers and consumers agree on =schema_id= and on what each field means under it, and =eindir_objective_descriptor_compatible(actual, required)= compares the two.
+In =required=, an empty string, a NULL string or a zero number accepts any value, so a consumer states only what it depends on.
+=schema_id= is the exception: both sides must set it and it must match, because the other fields mean nothing without it.
+Operations are compared as a subset, so a producer may offer more than the consumer asks for.
+On a mismatch the function returns 0 and records a message for =eindir_last_error()=, which does not name the field.
+
+Only embedded handles carry a descriptor; =eindir_objective_new= leaves it NULL.
+
+* Tensors
+
+Points and gradients cross the boundary as DLPack 1.0 =DLManagedTensorVersioned= tensors, borrowed for the duration of one call.
+DLPack is the tensor exchange format that NumPy, PyTorch, JAX and others implement, so a producer that already has DLPack tensors can pass them on.
+
+eindir checks little.
+It reads and writes contiguous =double= values from =data=, ignoring =byte_offset=, and checks =ndim= and =shape[0]= only where a function says so; it does not check dtype, device or strides.
+The tensors it builds itself, in the Rust wrappers, are 1-D CPU float64 vectors of length =dim= with stride 1.
+A callback that may be called from C with tensors from elsewhere should check them.
+The cost of this choice is safety; the benefit is no per-call overhead, which matters for cheap objectives evaluated millions of times.
+
+* Errors
+
+A function records a message for =eindir_last_error()= when the failure is its own: a NULL argument, a bad shape, or a panic caught at the boundary.
+The message is per thread and is never cleared on success.
+A status returned by an =eindir_objective_t= callback is passed back unchanged and leaves the message alone, because the callback had no way to set one.
+The fallible entry points copy the callback's message into =eindir_last_error()= as well as into the caller's buffer.
+
+No Rust panic unwinds into C.
+The eval, grad and bounds functions of =eindir_objective_t= and the eval and grad functions of the fallible handle catch a panic and return the internal-error status with the panic message; in any other entry point a panic aborts the process, as Rust does for every =extern "C"= function.
+
+* From Rust
+
+=EindirObjectiveWrapper= gives a handle the =Objective=, =Gradient= and =DifferentiableObjective= traits.
+Those traits cannot fail, so a failed value becomes NaN and a missing gradient becomes zeros.
+=EindirTryObjectiveWrapper= gives the fallible handle the =Try*= traits with =CallbackError= as the error, so the status and message reach the driver.

@@ -11,15 +11,8 @@ pixi run -e python python-test
 
 * Conventional Commits
 
-Commit messages follow the Conventional Commits convention (enforced by cog in CI via cocogitto).
-Use the standard prefixes:
-
-- =feat:=  new functionality
-- =fix:=   bug fix
-- =docs:=  documentation only
-- =refactor:= behaviour-preserving code change
-- =chore:= tooling, build, dependency updates
-- =ci:=    CI configuration
+Commit subjects follow Conventional Commits, and the lint job of CI checks them with cocogitto.
+cog accepts its built-in types (=feat=, =fix=, =docs=, =test=, =ci=, =chore=, =style=, =refactor=, =perf=, =build=, =revert=) and the ones =cog.toml= adds (=enh=, =bug=, =maint=, =prj=, =doc=, =tst=, =bld=, =gen=, =dat=, =bench=, =rel=).
 
 * Changelog (towncrier)
 
@@ -68,10 +61,30 @@ Run it locally before pushing a bump.
 
 * Style
 
-Rust code is formatted with =cargo fmt= and linted with =cargo clippy --all-features -- -D warnings=.
-Python code follows =ruff=.
+Rust code is formatted with =cargo fmt= and linted with =cargo clippy --all-features --all-targets -- -D warnings=.
+There is no Python linter in CI; follow the surrounding code.
+Prose in the manual, the doc comments and the fragments uses plain sentences, one per line in Org, with commands and names in code markup.
 
 * Tests
 
 Rust tests live under =tests/= and in the modules under =src/=, and Python tests under =pytest/=.
 CI runs both on Linux and macOS with Python 3.10 to 3.13, building the package with pip and maturin (=.github/workflows/ci.yml=).
+
+* Documentation
+
+Edit the Org files under =docs/orgmode/=; =docs/source/*.rst= is generated.
+Tutorials include their Rust code from =examples/= with =#+INCLUDE:=, so =cargo test= compiles it and CI runs it.
+The docs job of CI runs these, and they are worth running before a push:
+
+#+BEGIN_SRC bash
+RUSTDOCFLAGS="-D warnings -D missing_docs" cargo doc --all-features --no-deps
+cargo clippy --all-features --lib -- -D warnings -W clippy::missing_errors_doc -W clippy::missing_panics_doc
+for e in examples/*.rs; do cargo run --example "$(basename "$e" .rs)"; done
+maturin develop --features python
+python -m pytest --doctest-modules python/eindir/__init__.py python/eindir/core
+python tools/check_org_examples.py   # every Python block in the manual
+python tools/check_links.py          # every link and DOI
+#+END_SRC
+
+=pixi run -e docs docbld= builds the site with Sphinx and fails on any warning.
+After changing the manual, =AGENTS.md= or a skill, run =python3 scripts/llms/build_llms.py= and commit =llms.txt= and =llms-full.txt=.
