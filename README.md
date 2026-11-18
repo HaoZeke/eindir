@@ -129,6 +129,6 @@ The C ABI exposes two complementary contracts for consumers such as rgpot and xt
    Zero scalar requirements and empty or NULL strings are wildcards, except `schema_id`, which must be set and equal on both sides.
    Operation bits are checked as a required subset.
 
-`eindir_core_abi_stamp()` returns ABI major `1`, ABI minor `1`, objective layout `3`, DLPack `1.0`, and the gradient and batch feature bits.
+`eindir_core_abi_stamp()` returns ABI major `1`, ABI minor `2`, objective layout `3`, DLPack `1.0`, and the gradient, batch and fallible callback (`EINDIR_ABI_FEATURE_TRY_CALLBACKS`) feature bits.
 The stable family string is `eindir.objective`.
 Consumers should call the validation functions before the first objective evaluation and include the received `eindir_abi_stamp_t` or descriptor in a rejection diagnostic.

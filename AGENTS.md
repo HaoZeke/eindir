@@ -158,7 +158,9 @@ C (see `skills/eindir-c-abi/`):
 - Ubuntu's `libdlpack-dev` is DLPack 0.6, which lacks `DLManagedTensorVersioned`.
   Use the v1.0 headers pinned in `ci.yml`.
 - eindir passes tensors to the callbacks unchecked.
-  A failing callback leaves `eindir_last_error()` as it was, and a success does not clear it.
+  A failing `eindir_objective_t` callback leaves `eindir_last_error()` as it was.
+  A failing `eindir_try_objective_t` callback sets it to the callback's message.
+  A success clears it in neither case.
 - `eindir_try_objective_t` is a separate handle with callbacks that return an `int32_t` status and write a message.
   `eindir_objective_t` keeps its callbacks and its layout, and a failure of its callbacks still reaches Rust only as NaN.
 - `schema_id` in a required descriptor is never a wildcard, although the header says empty fields are.
