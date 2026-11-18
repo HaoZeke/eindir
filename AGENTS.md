@@ -12,6 +12,7 @@ The anneal optimiser is built on it.
 
 - Objectives within box bounds: `Objective<T>` over `Bounds<T>`, with `eval`, `eval_batch`, and `eval_batch_parallel`, which uses rayon from `EVAL_BATCH_PARALLEL_MIN` points up.
 - Halton point sets: `low_discrepancy_points`, `shifted_low_discrepancy_points`, `boundary_anchored_low_discrepancy_points`, `halton_points`, `halton_unit`.
+- Fallible evaluation: `TryObjective<T>`, `TryGradient<T>` and `TryDifferentiableObjective<T>` with an associated error type that passes through unchanged. Every `Objective` and `Gradient` is one with `Error = Infallible`. The adapters are `NanOnError`, `PanicOnError`, `TryOracle`, `TryFiniteDiffGradient` and `try_eval_batch_parallel`.
 - Gradients: the `Gradient<T>` trait, `AnalyticGradient`, `FiniteDiffGradient`, `DifferentiableObjective` and, with the `autodiff` feature, `ForwardAd`.
 - A thermostat for the generalized Langevin equation (GLE): `GleThermostat`, `optimal_sampling_drift`, `matrix_exp`, `ldl_sqrt`.
 - Surrogates: `AdditiveSurrogate`, `ChebyshevSurrogate`, `ReducedObjective`.
@@ -27,7 +28,7 @@ Bindings:
 ## Layout
 
 - `Cargo.toml`: the crate, its feature flags and the only hand-written version.
-- `src/`: the Rust sources, with the C ABI in `ffi.rs` and the `_core` extension in `python.rs` and `py_objective.rs`.
+- `src/`: the Rust sources, with the fallible traits in `fallible.rs`, the C ABI in `ffi.rs` and its fallible callbacks in `ffi_try.rs` and the `_core` extension in `python.rs` and `py_objective.rs`.
 - `python/eindir/`: the pure-Python package (`NumLimit`, `ObjectiveFunction`, array API helpers, `viz`).
 - `pytest/`: the pytest suite.
 - `tests/`: Rust integration tests, `ffi_smoke.c`, `header_check.c` and `header_check.cpp`.
@@ -144,18 +145,27 @@ Rust (see `skills/eindir-rust/`):
 - `DifferentiableObjective` has no blanket impl, so add an empty `impl DifferentiableObjective<f64> for T {}`.
 - `Bounds::new` panics on lengths that differ, on a negative slack and on `low > high`.
   `mkpoint` panics when a coordinate has `low == high`.
+- Do not implement `TryObjective` or `TryGradient` by hand for a type that implements `Objective` or `Gradient`: the blanket impls already cover it, and a second impl is E0119.
+ Their methods are `dims`, `domain` and `grad_dims`, so that `x.dim()` stays unambiguous, and the gradient's error is `GradError`, so that `O::Error` is unambiguous under `TryDifferentiableObjective`.
 - `GleThermostat::canonical(drift, dt, temperature, kb)` takes Boltzmann's constant as its fourth argument and has no mass argument.
 
 C (see `skills/eindir-c-abi/`):
 
 - Without the `capi` feature the library exports no `eindir_` symbols.
   cargo-c enables it by itself.
-- A program linked against `target/<triple>/release` from `cargo cbuild` fails to start: the library's soname is `libeindir_core.so.0.7` and no file of that name is there.
+- A program linked against `target/<triple>/release` from `cargo cbuild` fails to start: the library's soname is `libeindir_core.so.0.8` and no file of that name is there.
   Install with `cargo cinstall` and link the prefix.
 - Ubuntu's `libdlpack-dev` is DLPack 0.6, which lacks `DLManagedTensorVersioned`.
   Use the v1.0 headers pinned in `ci.yml`.
 - eindir passes tensors to the callbacks unchecked.
-  A failing callback leaves `eindir_last_error()` as it was, and a success does not clear it.
+  A failing `eindir_objective_t` callback leaves `eindir_last_error()` as it was.
+  A failing `eindir_try_objective_t` callback sets it to the callback's message.
+  A success clears it in neither case.
+- `eindir_try_objective_t` is a separate handle with callbacks that return an `int32_t` status and write a message.
+  `eindir_objective_t` keeps its callbacks and its layout, and a failure of its callbacks still reaches Rust only as NaN.
+- A callback of `eindir_try_objective_t` writes its message bytes as they are, and eindir escapes them in `message_out`, `eindir_last_error()` and `CallbackError`.
+  Each backslash is doubled as `\\` and each byte that is not valid UTF-8 becomes a lowercase `\xhh`, so a callback must not double backslashes itself.
+  A buffer that is too small gets the message cut before the first UTF-8 sequence, `\xhh` or `\\` that does not fit, so it can stop up to three bytes short of `message_cap - 1`, while `eindir_last_error()` keeps the whole message.
 - `schema_id` in a required descriptor is never a wildcard, although the header says empty fields are.
 
 Repository:
@@ -168,7 +178,7 @@ Repository:
 
 Releases and the site, as of 2026-11-03:
 
-- `Cargo.toml` on main says 0.7.0, crates.io has 0.6.0, PyPI has 0.5.1 and the newest git tag is v0.5.2.
+- `Cargo.toml` on main says 0.8.0, crates.io has 0.6.0, PyPI has 0.5.1 and the newest git tag is v0.5.2.
   Check `cargo info eindir-core` and `pip index versions eindir` before relying on a released feature.
 - The HTML pages of [the site](https://eindir.rgoswami.me/) answer scripted clients with HTTP 403 and a challenge page.
   A path that does not exist returns the front page with status 200.

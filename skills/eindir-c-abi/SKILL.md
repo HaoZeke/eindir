@@ -1,13 +1,13 @@
 ---
 name: eindir-c-abi
-description: Build and install the eindir C library, link C or C++ programs to it, and define objectives in C with DLPack 1.0 tensors that Rust drivers can call. Use when compiling against eindir-core.h or eindir-core.hpp, writing eval or gradient callbacks, embedding eindir_objective_t in another library's struct, checking ABI compatibility or semantic descriptors, or when a program fails to start because libeindir_core.so.0.7 is missing.
+description: Build and install the eindir C library, link C or C++ programs to it, and define objectives in C with DLPack 1.0 tensors that Rust drivers can call. Use when compiling against eindir-core.h or eindir-core.hpp, writing eval or gradient callbacks, embedding eindir_objective_t in another library's struct, checking ABI compatibility or semantic descriptors, or when a program fails to start because libeindir_core.so.0.8 is missing.
 license: See LICENSE in the eindir repository
 compatibility: Rust 1.88 or newer with cargo-c 0.10.17 or newer, DLPack 1.0 headers, a C99 compiler and, for the C++ example, a C++17 compiler. The script needs Python 3.11 or newer. Without DLPACK_ROOT set, it downloads the DLPack archive, so it needs network access. Tested on Linux only.
 ---
 
 # The C library
 
-The C library exports fifteen functions: version and ABI queries, the objective handle (`eindir_objective_new`, `_free`, `_dim`, `_has_grad`, `_bounds_low`, `_bounds_high`, `_eval`, `_grad`), semantic descriptors and `eindir_last_error`.
+The C library exports twenty-one functions: version and ABI queries, the objective handle (`eindir_objective_new`, `_free`, `_dim`, `_has_grad`, `_bounds_low`, `_bounds_high`, `_eval`, `_grad`), the fallible handle (`eindir_try_objective_new`, `_free`, `_dim`, `_has_grad`, `_eval`, `_grad`), semantic descriptors and `eindir_last_error`.
 Points, gradients and bounds cross the boundary as DLPack 1.0 `DLManagedTensorVersioned` tensors that the caller owns and lends for the length of one call.
 The C and C++ blocks are excerpts of `assets/objective_demo.c` and `assets/raii_demo.cpp`, which `scripts/build_and_run.py` compiles and runs.
 
@@ -18,13 +18,13 @@ cargo install cargo-c        # once
 cargo cinstall --release --prefix="$PREFIX" --libdir=lib
 ```
 
-This installs `include/eindir-core.h`, `include/eindir-core.hpp`, `lib/libeindir_core.a`, `lib/libeindir_core.so.0.7.0` with the links `libeindir_core.so.0.7` and `libeindir_core.so`, and `lib/pkgconfig/eindir-core.pc`.
+This installs `include/eindir-core.h`, `include/eindir-core.hpp`, `lib/libeindir_core.a`, `lib/libeindir_core.so.0.8.0` with the links `libeindir_core.so.0.8` and `libeindir_core.so`, and `lib/pkgconfig/eindir-core.pc`.
 cargo-c turns on the `capi` feature by itself.
 
 - A plain `cargo build --release` builds `libeindir_core.so` with no `eindir_` symbols at all.
   Add `--features capi`.
-- `cargo cbuild --release` leaves the header and libraries under `target/<host triple>/release/`, but that `libeindir_core.so` has the soname `libeindir_core.so.0.7` and nothing of that name sits next to it.
-  A program linked there fails to start with `error while loading shared libraries: libeindir_core.so.0.7: cannot open shared object file`.
+- `cargo cbuild --release` leaves the header and libraries under `target/<host triple>/release/`, but that `libeindir_core.so` has the soname `libeindir_core.so.0.8` and nothing of that name sits next to it.
+  A program linked there fails to start with `error while loading shared libraries: libeindir_core.so.0.8: cannot open shared object file`.
   Install to a prefix, as above, or link the static archive.
 - `eindir-core.h` includes `<dlpack/dlpack.h>`, so DLPack 1.0 must be on the include path.
   Ubuntu's `libdlpack-dev` is 0.6, which has no `DLManagedTensorVersioned`.
@@ -98,6 +98,50 @@ static double *elements(const struct DLManagedTensorVersioned *t) {
   `grad_fn` may be NULL: then `eindir_objective_has_grad` returns 0 and `eindir_objective_grad` returns `EINDIR_INVALID_PARAMETER` with "no gradient callback".
 - Rust drivers see a C objective through `EindirObjectiveWrapper` in `src/ffi.rs`.
   It turns a failed value callback into NaN, returns zeros when there is no gradient callback, and ignores the status of the gradient callback.
+
+## Callbacks that can say why they failed
+
+The callbacks above return one of three statuses and cannot set a message.
+`eindir_try_objective_new` takes `EindirTryEvalFn` and `EindirTryGradFn` callbacks instead, which return an `int32_t` (0 is success, anything else a failure) and write a NUL-terminated message into the `message_out` buffer of `message_cap` bytes that eindir lends them.
+`eindir_try_objective_eval` and `_grad` return the callback's status, copy the message to the buffer you pass (NULL is allowed) and record it for `eindir_last_error()`.
+
+```c
+static int32_t try_sphere_eval(void *user_data,
+                               const struct DLManagedTensorVersioned *x,
+                               double *value_out, char *message_out,
+                               uintptr_t message_cap) {
+    const double *xs;
+    double sum = 0.0;
+    int i;
+    (void)user_data;
+    if (!is_f64_vector(x, DIM)) {
+        snprintf(message_out, message_cap, "x is not a float64 vector of length %d",
+                 DIM);
+        return EINDIR_TRY_INVALID_PARAMETER;
+    }
+    xs = elements(x);
+    if (xs[0] > 10.0) {
+        snprintf(message_out, message_cap, "geometry refused: x[0] = %g", xs[0]);
+        return SPHERE_REFUSED;
+    }
+```
+
+```c
+    status = eindir_try_objective_eval(tried, &far_t, &f, message, sizeof message);
+    CHECK(status == SPHERE_REFUSED, "the callback's own status comes back");
+    CHECK(strcmp(eindir_last_error(), message) == 0,
+          "the message is also the last error");
+```
+
+`eindir_objective_t` and its callbacks are unchanged, and the library advertises `EINDIR_ABI_FEATURE_TRY_CALLBACKS`.
+Rust drivers see the new handle through `EindirTryObjectiveWrapper`, whose error is a `CallbackError` with the status and the message.
+
+- A callback writes its message bytes as they are.
+  eindir reads them up to the first NUL and escapes them: each backslash comes back doubled as `\\`, and each byte that is not valid UTF-8 as a lowercase `\xhh`.
+  A callback that writes the bytes `C:\tmp` therefore reaches `message_out`, `eindir_last_error()` and `CallbackError` as `C:\\tmp`, and a callback does not double backslashes itself.
+- When `message_cap` is too small for the escaped message, `eindir_try_objective_eval` and `_grad` cut it before the first UTF-8 sequence, `\xhh` or `\\` that does not fit.
+  The buffer never ends in half an escape, and it can stop up to three bytes short of `message_cap - 1`.
+  `eindir_last_error()` keeps the whole message.
 
 ## Ownership
 

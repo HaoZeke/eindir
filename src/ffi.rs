@@ -56,6 +56,9 @@ pub const EINDIR_ABI_FAMILY: &[u8] = b"eindir.objective\0";
 pub const EINDIR_ABI_FEATURE_GRADIENT: u64 = 1 << 0;
 /// Feature bit indicating that batched objective evaluation is supported.
 pub const EINDIR_ABI_FEATURE_BATCH: u64 = 1 << 1;
+/// Feature bit indicating that fallible callbacks with a status code and a
+/// message are supported (`eindir_try_objective_t`).
+pub const EINDIR_ABI_FEATURE_TRY_CALLBACKS: u64 = 1 << 2;
 
 /// Objective operation bit indicating that the value callback is available.
 pub const EINDIR_OBJECTIVE_OPERATION_ENERGY: u64 = 1 << 0;
@@ -211,10 +214,10 @@ pub type EindirFreeFn = Option<unsafe extern "C" fn(*mut c_void)>;
 pub struct eindir_objective_t {
     /// Number of input dimensions.
     pub dim: usize,
-    /// Lower bounds: heap-allocated f64[dim], owned by this struct when
+    /// Lower bounds: heap-allocated `f64[dim]`, owned by this struct when
     /// created via eindir_objective_new.
     pub low: *mut f64,
-    /// Upper bounds: heap-allocated f64[dim], owned by this struct when
+    /// Upper bounds: heap-allocated `f64[dim]`, owned by this struct when
     /// created via eindir_objective_new.
     pub high: *mut f64,
     /// Value callback.  Must not be NULL.
@@ -246,13 +249,15 @@ pub extern "C" fn eindir_core_abi_family() -> *const c_char {
 pub extern "C" fn eindir_core_abi_stamp() -> eindir_abi_stamp_t {
     eindir_abi_stamp_t {
         abi_major: 1,
-        abi_minor: 1,
+        abi_minor: 2,
         objective_layout: 3,
         objective_size: std::mem::size_of::<eindir_objective_t>(),
         objective_align: std::mem::align_of::<eindir_objective_t>(),
         dlpack_major: 1,
         dlpack_minor: 0,
-        features: EINDIR_ABI_FEATURE_GRADIENT | EINDIR_ABI_FEATURE_BATCH,
+        features: EINDIR_ABI_FEATURE_GRADIENT
+            | EINDIR_ABI_FEATURE_BATCH
+            | EINDIR_ABI_FEATURE_TRY_CALLBACKS,
     }
 }
 
@@ -432,6 +437,43 @@ pub(crate) unsafe fn tensor_free(tensor: *mut DLManagedTensorVersioned) {
 // Constructor / destructor
 // ---------------------------------------------------------------------------
 
+/// Copy a 1-D bounds tensor of `dim` doubles, recording why on failure.
+///
+/// # Safety
+///
+/// `tensor` must be null or point to a readable DLPack tensor whose data
+/// holds the number of doubles its shape states.
+pub(crate) unsafe fn copy_bounds(
+    caller: &str,
+    tensor: *const DLManagedTensorVersioned,
+    name: &str,
+    dim: usize,
+) -> Option<Vec<f64>> {
+    if tensor.is_null() {
+        set_last_error(&format!("{caller}: {name} is NULL"));
+        return None;
+    }
+    let t = unsafe { &(*tensor).dl_tensor };
+    if t.ndim != 1 {
+        set_last_error(&format!(
+            "{caller}: {name} must be 1-D, got ndim={}",
+            t.ndim
+        ));
+        return None;
+    }
+    let len = unsafe { *t.shape } as usize;
+    if len != dim {
+        set_last_error(&format!("{caller}: {name} length {len} != dim {dim}"));
+        return None;
+    }
+    let data = t.data as *const f64;
+    if data.is_null() {
+        set_last_error(&format!("{caller}: {name} data is NULL"));
+        return None;
+    }
+    Some(unsafe { std::slice::from_raw_parts(data, len) }.to_vec())
+}
+
 /// Create a new heap-allocated objective handle from C callbacks.
 ///
 /// Bounds data is copied from the DLPack tensors; the caller may free them
@@ -455,42 +497,16 @@ pub unsafe extern "C" fn eindir_objective_new(
     user_data: *mut c_void,
     free_fn: EindirFreeFn,
 ) -> *mut eindir_objective_t {
-    let copy_bounds = |tensor: *const DLManagedTensorVersioned, name: &str| -> Option<Vec<f64>> {
-        if tensor.is_null() {
-            set_last_error(&format!("eindir_objective_new: {name} is NULL"));
-            return None;
-        }
-        let t = unsafe { &(*tensor).dl_tensor };
-        if t.ndim != 1 {
-            set_last_error(&format!(
-                "eindir_objective_new: {name} must be 1-D, got ndim={}",
-                t.ndim
-            ));
-            return None;
-        }
-        let len = unsafe { *t.shape } as usize;
-        if len != dim {
-            set_last_error(&format!(
-                "eindir_objective_new: {name} length {len} != dim {dim}"
-            ));
-            return None;
-        }
-        let data = t.data as *const f64;
-        if data.is_null() {
-            set_last_error(&format!("eindir_objective_new: {name} data is NULL"));
-            return None;
-        }
-        Some(unsafe { std::slice::from_raw_parts(data, len) }.to_vec())
-    };
-
-    let low_vec = match copy_bounds(bounds_low, "bounds_low") {
-        Some(v) => v,
-        None => return std::ptr::null_mut(),
-    };
-    let high_vec = match copy_bounds(bounds_high, "bounds_high") {
-        Some(v) => v,
-        None => return std::ptr::null_mut(),
-    };
+    let low_vec =
+        match unsafe { copy_bounds("eindir_objective_new", bounds_low, "bounds_low", dim) } {
+            Some(v) => v,
+            None => return std::ptr::null_mut(),
+        };
+    let high_vec =
+        match unsafe { copy_bounds("eindir_objective_new", bounds_high, "bounds_high", dim) } {
+            Some(v) => v,
+            None => return std::ptr::null_mut(),
+        };
 
     // Leak the Vecs into raw pointers -- eindir_objective_free reclaims them.
     let low = {
@@ -566,7 +582,7 @@ pub unsafe extern "C" fn eindir_objective_dim(obj: *const eindir_objective_t) ->
     unsafe { (*obj).dim }
 }
 
-/// Writes the lower-bound vector into `out` (pre-allocated DLPack tensor, shape [dim]).
+/// Writes the lower-bound vector into `out` (pre-allocated DLPack tensor, shape `[dim]`).
 ///
 /// # Safety
 ///
@@ -594,7 +610,7 @@ pub unsafe extern "C" fn eindir_objective_bounds_low(
     }))
 }
 
-/// Writes the upper-bound vector into `out` (pre-allocated DLPack tensor, shape [dim]).
+/// Writes the upper-bound vector into `out` (pre-allocated DLPack tensor, shape `[dim]`).
 ///
 /// # Safety
 ///
@@ -817,7 +833,7 @@ mod tests {
     fn abi_stamp_describes_the_embedded_objective_contract() {
         let stamp = eindir_core_abi_stamp();
         assert_eq!(stamp.abi_major, 1);
-        assert_eq!(stamp.abi_minor, 1);
+        assert_eq!(stamp.abi_minor, 2);
         assert_eq!(stamp.objective_layout, 3);
         assert_eq!(
             stamp.objective_size,
@@ -830,6 +846,7 @@ mod tests {
         assert_eq!(stamp.dlpack_major, 1);
         assert_eq!(stamp.dlpack_minor, 0);
         assert!(stamp.features & EINDIR_ABI_FEATURE_GRADIENT != 0);
+        assert!(stamp.features & EINDIR_ABI_FEATURE_TRY_CALLBACKS != 0);
     }
 
     #[test]

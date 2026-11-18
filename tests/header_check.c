@@ -23,9 +23,42 @@ static enum eindir_status_t grad_cb(void *user_data,
     return EINDIR_SUCCESS;
 }
 
+static int32_t try_eval_cb(void *user_data,
+                           const struct DLManagedTensorVersioned *x,
+                           double *value_out, char *message_out,
+                           uintptr_t message_cap) {
+    (void)user_data;
+    (void)x;
+    (void)message_out;
+    (void)message_cap;
+    *value_out = 0.0;
+    return EINDIR_TRY_SUCCESS;
+}
+
+static int32_t try_grad_cb(void *user_data,
+                           const struct DLManagedTensorVersioned *x,
+                           struct DLManagedTensorVersioned *grad_out,
+                           char *message_out, uintptr_t message_cap) {
+    (void)user_data;
+    (void)x;
+    (void)grad_out;
+    (void)message_out;
+    (void)message_cap;
+    return EINDIR_TRY_SUCCESS;
+}
+
 int main(void) {
     EindirEvalFn eval_fn = eval_cb;
     EindirGradFn grad_fn = grad_cb;
+    EindirTryEvalFn try_eval_fn = try_eval_cb;
+    EindirTryGradFn try_grad_fn = try_grad_cb;
+    int32_t (*try_eval_api)(const struct eindir_try_objective_t *,
+                            const struct DLManagedTensorVersioned *, double *,
+                            char *, uintptr_t) = eindir_try_objective_eval;
+    int32_t (*try_grad_api)(const struct eindir_try_objective_t *,
+                            const struct DLManagedTensorVersioned *,
+                            struct DLManagedTensorVersioned *, char *,
+                            uintptr_t) = eindir_try_objective_grad;
     enum eindir_status_t (*eval_api)(const struct eindir_objective_t *,
                                      const struct DLManagedTensorVersioned *,
                                      double *) = eindir_objective_eval;
@@ -42,5 +75,9 @@ int main(void) {
     (void)eval_api;
     (void)grad_api;
     (void)new_api;
+    (void)try_eval_fn;
+    (void)try_grad_fn;
+    (void)try_eval_api;
+    (void)try_grad_api;
     return 0;
 }

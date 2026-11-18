@@ -83,6 +83,7 @@ The IISE manuscript (HaoZeke/anneal) shows how these feed the five-component alg
 
    architecture
    explanation/primitives
+   explanation/fallible-objectives
    explanation/gle
    explanation/surrogates
 #+end_export

@@ -93,6 +93,16 @@ The builtins `Rastrigin::<D>`, `Rosenbrock::<D>`, `Ackley::<D>` and `StybTang2D`
 On a type with both traits `x.dim()` is ambiguous (error E0034), so write `Objective::dim(&x)`.
 The `autodiff` feature adds `ForwardAd`, which turns a `DualField` written once over `num-dual` into an objective with an exact gradient.
 
+## Fallible objectives
+
+`Objective::eval` and `Gradient::grad` cannot fail.
+For a surface that can, implement `TryObjective<T>` (`dims`, `domain`, `try_eval`), `TryGradient<T>` (`try_grad`, `grad_dims`) and an empty `TryDifferentiableObjective<T>`, with your own error type.
+A driver generic over `O: TryDifferentiableObjective<f64> + ?Sized` returns `O::Error` unchanged, and accepts every ordinary `Objective + Gradient` too, because each is a `Try*` type with `Error = Infallible`.
+Do not implement `TryObjective` by hand for a type that implements `Objective`: the blanket impl covers it.
+The gradient's error is named `GradError`, so `O::Error` is not ambiguous.
+`NanOnError` and `PanicOnError` go back to the infallible traits, `TryOracle` wraps a `Result`-returning closure, and `TryFiniteDiffGradient` differences a `TryObjective`.
+The manual's Fallible objectives page has the design and the C form (`eindir_try_objective_t`, with `capi`).
+
 ## The GLE thermostat
 
 From [assets/gle_and_surrogate.rs](assets/gle_and_surrogate.rs):

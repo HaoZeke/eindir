@@ -5,6 +5,11 @@
 The central abstraction: a callable with bounds, optional gradient, and a protocol that both Rust and Python sides understand.
 Everything else (low-disc, GLE, surrogates, anneal drivers) is built to consume or produce Objectives.
 
+** Fallible evaluation
+=Objective::eval= cannot fail.
+A surface that can fail implements =TryObjective= and =TryGradient= instead, with an error type of its own that reaches the caller unchanged; every =Objective= is already one, with =Error = Infallible=.
+See [[file:fallible-objectives.org][Fallible objectives]].
+
 * Low-discrepancy
 Reproducible, well-spaced designs that avoid the clustering of random samples.
 Used for everything from mixer initialisation to surrogate pilots.

@@ -94,6 +94,34 @@ static enum eindir_status_t sphere_grad(void *user_data,
     return EINDIR_SUCCESS;
 }
 
+#define SPHERE_REFUSED 7
+
+/* A fallible callback: a status and a message. Refuses x[0] above 10. */
+static int32_t try_sphere_eval(void *user_data,
+                               const struct DLManagedTensorVersioned *x,
+                               double *value_out, char *message_out,
+                               uintptr_t message_cap) {
+    const double *xs;
+    double sum = 0.0;
+    int i;
+    (void)user_data;
+    if (!is_f64_vector(x, DIM)) {
+        snprintf(message_out, message_cap, "x is not a float64 vector of length %d",
+                 DIM);
+        return EINDIR_TRY_INVALID_PARAMETER;
+    }
+    xs = elements(x);
+    if (xs[0] > 10.0) {
+        snprintf(message_out, message_cap, "geometry refused: x[0] = %g", xs[0]);
+        return SPHERE_REFUSED;
+    }
+    for (i = 0; i < DIM; ++i) {
+        sum += xs[i] * xs[i];
+    }
+    *value_out = sum;
+    return EINDIR_TRY_SUCCESS;
+}
+
 static void free_sphere(void *user_data) {
     struct sphere *s = user_data;
     *s->freed = 1;
@@ -133,6 +161,7 @@ int main(void) {
     double g[DIM] = {0.0, 0.0, 0.0};
     double back[DIM] = {0.0, 0.0, 0.0};
     double pair[2] = {0.0, 0.0};
+    double far[DIM] = {11.0, 0.0, 0.0};
     int64_t shape[1] = {DIM};
     int64_t pair_shape[1] = {2};
     struct DLManagedTensorVersioned low_t = vector(low, shape);
@@ -141,14 +170,17 @@ int main(void) {
     struct DLManagedTensorVersioned g_t = vector(g, shape);
     struct DLManagedTensorVersioned back_t = vector(back, shape);
     struct DLManagedTensorVersioned pair_t = vector(pair, pair_shape);
+    struct DLManagedTensorVersioned far_t = vector(far, shape);
     struct sphere plain_ctx = {{1.0, 2.0, 3.0}, 0, NULL};
     struct sphere *ctx;
     eindir_objective_t *obj;
     eindir_objective_t *plain;
+    eindir_try_objective_t *tried;
     eindir_objective_descriptor_t required;
     struct producer p;
     char message[256];
     double f = 0.0;
+    int32_t status;
     int freed = 0;
     int i;
 
@@ -243,6 +275,25 @@ int main(void) {
     required.schema_id = "";
     CHECK(eindir_objective_descriptor_compatible(&produced, &required) == 0,
           "schema_id is never a wildcard");
+
+    tried = eindir_try_objective_new(DIM, &low_t, &high_t, try_sphere_eval, NULL,
+                                     NULL, NULL);
+    CHECK(tried != NULL && eindir_try_objective_has_grad(tried) == 0,
+          "eindir_try_objective_new");
+    CHECK(stamp.features & EINDIR_ABI_FEATURE_TRY_CALLBACKS,
+          "fallible callback feature bit");
+    status = eindir_try_objective_eval(tried, &x_t, &f, message, sizeof message);
+    CHECK(status == EINDIR_TRY_SUCCESS && f == 0.0 && message[0] == '\0',
+          "a fallible callback that succeeds");
+    status = eindir_try_objective_eval(tried, &far_t, &f, message, sizeof message);
+    CHECK(status == SPHERE_REFUSED, "the callback's own status comes back");
+    CHECK(strcmp(eindir_last_error(), message) == 0,
+          "the message is also the last error");
+    printf("fallible callback: status %d, message \"%s\"\n", (int)status, message);
+    status = eindir_try_objective_eval(tried, &pair_t, &f, NULL, 0);
+    CHECK(status == EINDIR_TRY_INVALID_PARAMETER,
+          "a NULL message buffer is allowed");
+    eindir_try_objective_free(tried);
 
     eindir_objective_free(obj);
     CHECK(freed == 1, "eindir_objective_free called free_fn");
