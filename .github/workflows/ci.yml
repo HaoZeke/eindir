@@ -70,6 +70,73 @@ jobs:
           PYTHON: python
         run: tools/check-version-drift.sh
 
+  docs:
+    name: Docs (rustdoc, doctests, examples, links)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Setup sccache
+        uses: mozilla-actions/sccache-action@v0.0.9
+        with:
+          version: "v0.10.0"
+
+      - name: Setup sccache environment
+        run: |
+          echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
+          echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
+
+      - name: rustdoc, default features
+        env:
+          RUSTDOCFLAGS: -D warnings -D missing_docs
+        run: cargo doc --no-deps
+
+      - name: rustdoc, all features
+        env:
+          RUSTDOCFLAGS: -D warnings -D missing_docs
+        run: cargo doc --all-features --no-deps
+
+      - name: Errors and panics sections
+        run: >-
+          cargo clippy --all-features --lib -- -D warnings
+          -W clippy::missing_errors_doc -W clippy::missing_panics_doc
+
+      - name: Rust doctests
+        run: cargo test --all-features --doc
+
+      - name: Examples the manual includes
+        run: |
+          set -euo pipefail
+          for e in examples/*.rs; do
+            cargo run --release --example "$(basename "$e" .rs)"
+          done
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build the Python package
+        run: |
+          python -m venv .venv
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+          echo "VIRTUAL_ENV=$PWD/.venv" >> "$GITHUB_ENV"
+          .venv/bin/python -m pip install "maturin>=1.5,<2" pytest numpy
+          .venv/bin/maturin develop --features python
+
+      - name: Python doctests
+        run: python -m pytest --doctest-modules python/eindir/__init__.py python/eindir/core
+
+      - name: Python blocks of the manual
+        run: python tools/check_org_examples.py
+
+      - name: Links and DOIs
+        run: python tools/check_links.py
+
   test:
     name: Test (${{ matrix.os }}, py ${{ matrix.python-version }})
     runs-on: ${{ matrix.os }}
