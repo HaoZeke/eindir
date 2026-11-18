@@ -163,6 +163,9 @@ C (see `skills/eindir-c-abi/`):
   A success clears it in neither case.
 - `eindir_try_objective_t` is a separate handle with callbacks that return an `int32_t` status and write a message.
   `eindir_objective_t` keeps its callbacks and its layout, and a failure of its callbacks still reaches Rust only as NaN.
+- A callback of `eindir_try_objective_t` writes its message bytes as they are, and eindir escapes them in `message_out`, `eindir_last_error()` and `CallbackError`.
+  Each backslash is doubled as `\\` and each byte that is not valid UTF-8 becomes a lowercase `\xhh`, so a callback must not double backslashes itself.
+  A buffer that is too small gets the message cut before the first UTF-8 sequence, `\xhh` or `\\` that does not fit, so it can stop up to three bytes short of `message_cap - 1`, while `eindir_last_error()` keeps the whole message.
 - `schema_id` in a required descriptor is never a wildcard, although the header says empty fields are.
 
 Repository:

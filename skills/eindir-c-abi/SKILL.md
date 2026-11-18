@@ -136,6 +136,13 @@ static int32_t try_sphere_eval(void *user_data,
 `eindir_objective_t` and its callbacks are unchanged, and the library advertises `EINDIR_ABI_FEATURE_TRY_CALLBACKS`.
 Rust drivers see the new handle through `EindirTryObjectiveWrapper`, whose error is a `CallbackError` with the status and the message.
 
+- A callback writes its message bytes as they are.
+  eindir reads them up to the first NUL and escapes them: each backslash comes back doubled as `\\`, and each byte that is not valid UTF-8 as a lowercase `\xhh`.
+  A callback that writes the bytes `C:\tmp` therefore reaches `message_out`, `eindir_last_error()` and `CallbackError` as `C:\\tmp`, and a callback does not double backslashes itself.
+- When `message_cap` is too small for the escaped message, `eindir_try_objective_eval` and `_grad` cut it before the first UTF-8 sequence, `\xhh` or `\\` that does not fit.
+  The buffer never ends in half an escape, and it can stop up to three bytes short of `message_cap - 1`.
+  `eindir_last_error()` keeps the whole message.
+
 ## Ownership
 
 ```c

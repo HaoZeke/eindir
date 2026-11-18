@@ -562,6 +562,9 @@ typedef int32_t (*EindirTryEvalFn)(void *user_data,
 - `eindir_try_objective_eval` and `eindir_try_objective_grad` return the callback's status, copy the message into the caller's buffer (truncated to fit, and NULL is allowed) and also record it for `eindir_last_error()`.
   The old entry points leave `eindir_last_error()` alone after a callback fails, and these do not.
 - Callback messages are decoded losslessly before surfacing in `CallbackError`, `eindir_last_error()`, and `message_out`: valid UTF-8 sequences stay verbatim except that `\` is doubled to `\\`, and every invalid UTF-8 byte is escaped visibly as `\xhh` in lowercase hexadecimal so the original bytes up to the first NUL remain recoverable.
+  The callback writes its bytes as they are and does not double anything itself.
+  When `message_cap` is too small, the copy in `message_out` is cut before the first UTF-8 sequence, `\xhh` or `\\` that does not fit, so it never ends in half an escape and can stop up to three bytes short of `message_cap - 1`.
+  `eindir_last_error()` keeps the whole message.
 - In Rust, `EindirTryObjectiveWrapper` implements the `Try*` traits with `Error = CallbackError { code, message }`, so a failure reaches a generic driver with both fields intact.
   Without a gradient callback `try_grad` fails with "no gradient callback"; the old wrapper returns zeros.
 - `eindir_core_abi_stamp()` reports ABI minor 2 and the feature bit `EINDIR_ABI_FEATURE_TRY_CALLBACKS`.
@@ -1216,9 +1219,14 @@ C (see `skills/eindir-c-abi/`):
 - Ubuntu's `libdlpack-dev` is DLPack 0.6, which lacks `DLManagedTensorVersioned`.
   Use the v1.0 headers pinned in `ci.yml`.
 - eindir passes tensors to the callbacks unchecked.
-  A failing callback leaves `eindir_last_error()` as it was, and a success does not clear it.
+  A failing `eindir_objective_t` callback leaves `eindir_last_error()` as it was.
+  A failing `eindir_try_objective_t` callback sets it to the callback's message.
+  A success clears it in neither case.
 - `eindir_try_objective_t` is a separate handle with callbacks that return an `int32_t` status and write a message.
   `eindir_objective_t` keeps its callbacks and its layout, and a failure of its callbacks still reaches Rust only as NaN.
+- A callback of `eindir_try_objective_t` writes its message bytes as they are, and eindir escapes them in `message_out`, `eindir_last_error()` and `CallbackError`.
+  Each backslash is doubled as `\\` and each byte that is not valid UTF-8 becomes a lowercase `\xhh`, so a callback must not double backslashes itself.
+  A buffer that is too small gets the message cut before the first UTF-8 sequence, `\xhh` or `\\` that does not fit, so it can stop up to three bytes short of `message_cap - 1`, while `eindir_last_error()` keeps the whole message.
 - `schema_id` in a required descriptor is never a wildcard, although the header says empty fields are.
 
 Repository:
@@ -1371,6 +1379,13 @@ static int32_t try_sphere_eval(void *user_data,
 
 `eindir_objective_t` and its callbacks are unchanged, and the library advertises `EINDIR_ABI_FEATURE_TRY_CALLBACKS`.
 Rust drivers see the new handle through `EindirTryObjectiveWrapper`, whose error is a `CallbackError` with the status and the message.
+
+- A callback writes its message bytes as they are.
+  eindir reads them up to the first NUL and escapes them: each backslash comes back doubled as `\\`, and each byte that is not valid UTF-8 as a lowercase `\xhh`.
+  A callback that writes the bytes `C:\tmp` therefore reaches `message_out`, `eindir_last_error()` and `CallbackError` as `C:\\tmp`, and a callback does not double backslashes itself.
+- When `message_cap` is too small for the escaped message, `eindir_try_objective_eval` and `_grad` cut it before the first UTF-8 sequence, `\xhh` or `\\` that does not fit.
+  The buffer never ends in half an escape, and it can stop up to three bytes short of `message_cap - 1`.
+  `eindir_last_error()` keeps the whole message.
 
 ### Ownership
 
