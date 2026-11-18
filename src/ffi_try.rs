@@ -15,6 +15,13 @@
 //! [`TryObjective`] impl of
 //! [`EindirTryObjectiveWrapper`], and reach C as the return value and the
 //! buffer of `eindir_try_objective_eval` and `eindir_try_objective_grad`.
+//!
+//! Callback messages are preserved losslessly as valid UTF-8 strings across
+//! [`CallbackError`], `eindir_last_error()`, and `message_out`. Valid UTF-8
+//! sequences remain verbatim except that each backslash `\` is escaped as
+//! `\\`, and each invalid UTF-8 byte is escaped visibly as `\xhh` in
+//! lowercase hexadecimal. Because literal backslashes are doubled, the
+//! original byte sequence up to the first NUL is unambiguously recoverable.
 
 use std::ffi::{c_char, c_void};
 
@@ -105,6 +112,9 @@ pub struct CallbackError {
     /// The nonzero status the callback returned.
     pub code: i32,
     /// The message the callback wrote, empty when it wrote none.
+    ///
+    /// Valid UTF-8 sequences are kept verbatim with backslashes doubled as `\\`,
+    /// and invalid UTF-8 bytes are escaped visibly as `\xhh`.
     pub message: String,
 }
 
@@ -156,27 +166,58 @@ where
     }
 }
 
-/// Copy `message` into the caller's buffer, truncated to fit with its NUL.
+/// Copy `message` into the caller's buffer, truncated on a UTF-8 boundary to
+/// fit with its NUL.
 fn write_message(out: *mut c_char, cap: usize, message: &str) {
     if out.is_null() || cap == 0 {
         return;
     }
     let bytes = message.as_bytes();
-    let n = bytes.len().min(cap - 1);
+    let mut n = bytes.len().min(cap - 1);
+    while n > 0 && !message.is_char_boundary(n) {
+        n -= 1;
+    }
     unsafe {
         std::ptr::copy_nonoverlapping(bytes.as_ptr().cast::<c_char>(), out, n);
         *out.add(n) = 0;
     }
 }
 
-/// Read the NUL-terminated message a callback left in `buf`.
+/// Decode a NUL-free byte slice into a lossless, reversible UTF-8 string.
+///
+/// Valid UTF-8 spans are kept verbatim except that `\` is escaped as `\\`, and
+/// each invalid UTF-8 byte is escaped visibly as `\xhh` in lowercase
+/// hexadecimal.
+fn decode_message(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut out = String::with_capacity(bytes.len());
+    for chunk in bytes.utf8_chunks() {
+        for ch in chunk.valid().chars() {
+            if ch == '\\' {
+                out.push_str("\\\\");
+            } else {
+                out.push(ch);
+            }
+        }
+        for &byte in chunk.invalid() {
+            out.push('\\');
+            out.push('x');
+            out.push(HEX[(byte >> 4) as usize] as char);
+            out.push(HEX[(byte & 0x0f) as usize] as char);
+        }
+    }
+    out
+}
+
+/// Read the NUL-terminated message a callback left in `buf` under the lossless
+/// escaping policy.
 fn read_message(buf: &[c_char; EINDIR_TRY_MESSAGE_CAP]) -> String {
     let bytes: Vec<u8> = buf
         .iter()
         .take_while(|&&c| c != 0)
         .map(|&c| c as u8)
         .collect();
-    String::from_utf8_lossy(&bytes).into_owned()
+    decode_message(&bytes)
 }
 
 /// Call the value callback and turn its status and message into a result.
@@ -365,8 +406,10 @@ pub unsafe extern "C" fn eindir_try_objective_has_grad(obj: *const eindir_try_ob
 /// A NULL argument gives [`EINDIR_TRY_INVALID_PARAMETER`] and a panic gives
 /// [`EINDIR_TRY_INTERNAL_ERROR`]. On failure the message is written to
 /// `message_out` (when it is not NULL and `message_cap` is not 0, truncated
-/// to fit with its NUL) and also recorded for `eindir_last_error()`. On
-/// success `message_out` is set to the empty string.
+/// to fit with its NUL) and also recorded for `eindir_last_error()`. Any
+/// non-UTF-8 bytes written by the callback are escaped visibly as `\xhh` with
+/// backslashes doubled as `\\` so no byte information is lost. On success
+/// `message_out` is set to the empty string.
 ///
 /// # Safety
 ///
@@ -860,5 +903,123 @@ mod tests {
             eindir_try_objective_free(obj);
         }
         assert_eq!(FREED.load(Ordering::SeqCst), 1);
+    }
+
+    unsafe extern "C" fn raw_bytes_eval(
+        _ud: *mut c_void,
+        _x: *const DLManagedTensorVersioned,
+        _out: *mut f64,
+        message_out: *mut c_char,
+        message_cap: usize,
+    ) -> i32 {
+        let raw = b"bad \xff\xfe byte\0";
+        assert!(message_cap >= raw.len());
+        unsafe { std::ptr::copy_nonoverlapping(raw.as_ptr().cast(), message_out, raw.len()) };
+        REFUSED
+    }
+
+    unsafe extern "C" fn raw_bytes_grad(
+        _ud: *mut c_void,
+        _x: *const DLManagedTensorVersioned,
+        _grad_out: *mut DLManagedTensorVersioned,
+        message_out: *mut c_char,
+        message_cap: usize,
+    ) -> i32 {
+        let raw = b"caf\xc3\xa9 \\xff \x80\0";
+        assert!(message_cap >= raw.len());
+        unsafe { std::ptr::copy_nonoverlapping(raw.as_ptr().cast(), message_out, raw.len()) };
+        BROKEN
+    }
+
+    fn unescape_message(encoded: &str) -> Vec<u8> {
+        let bytes = encoded.as_bytes();
+        let mut out = Vec::with_capacity(bytes.len());
+        let mut i = 0;
+        while i < bytes.len() {
+            if bytes[i] == b'\\' {
+                assert!(i + 1 < bytes.len(), "dangling escape in {encoded:?}");
+                if bytes[i + 1] == b'\\' {
+                    out.push(b'\\');
+                    i += 2;
+                } else {
+                    assert_eq!(bytes[i + 1], b'x', "unexpected escape in {encoded:?}");
+                    let hex = std::str::from_utf8(&bytes[i + 2..i + 4]).expect("hex digits");
+                    out.push(u8::from_str_radix(hex, 16).expect("valid hex byte"));
+                    i += 4;
+                }
+            } else {
+                out.push(bytes[i]);
+                i += 1;
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn invalid_utf8_callback_bytes_are_preserved_losslessly() {
+        let obj = make(raw_bytes_eval, Some(raw_bytes_grad), 2);
+        let wrapper = unsafe { EindirTryObjectiveWrapper::new(&*obj) };
+        let eval_err = wrapper
+            .try_eval(array![1.0, 2.0].view())
+            .expect_err("eval callback must fail");
+        assert_eq!(eval_err, CallbackError::new(REFUSED, "bad \\xff\\xfe byte"));
+
+        let grad_err = wrapper
+            .try_grad(array![1.0, 2.0].view())
+            .expect_err("grad callback must fail");
+        assert_eq!(grad_err, CallbackError::new(BROKEN, "café \\\\xff \\x80"));
+
+        let mut x = [1.0, 2.0];
+        let x_t = unsafe { create_borrowed_f64_1d(x.as_mut_ptr(), 2) };
+        let mut g = [0.0; 2];
+        let g_t = unsafe { create_borrowed_f64_1d(g.as_mut_ptr(), 2) };
+        let mut buf = [0 as c_char; 64];
+        let mut value = 0.0;
+
+        let status =
+            unsafe { eindir_try_objective_eval(obj, x_t, &mut value, buf.as_mut_ptr(), 64) };
+        assert_eq!(status, REFUSED);
+        let out_bytes = unsafe { CStr::from_ptr(buf.as_ptr()) }.to_bytes();
+        assert_eq!(out_bytes, b"bad \\xff\\xfe byte");
+        let last_bytes = unsafe { CStr::from_ptr(crate::ffi::eindir_last_error()) }.to_bytes();
+        assert_eq!(last_bytes, b"bad \\xff\\xfe byte");
+
+        let status = unsafe { eindir_try_objective_grad(obj, x_t, g_t, buf.as_mut_ptr(), 64) };
+        assert_eq!(status, BROKEN);
+        let out_bytes = unsafe { CStr::from_ptr(buf.as_ptr()) }.to_bytes();
+        assert_eq!(out_bytes, "café \\\\xff \\x80".as_bytes());
+        let last_bytes = unsafe { CStr::from_ptr(crate::ffi::eindir_last_error()) }.to_bytes();
+        assert_eq!(last_bytes, "café \\\\xff \\x80".as_bytes());
+
+        unsafe {
+            tensor_free(x_t);
+            tensor_free(g_t);
+            eindir_try_objective_free(obj);
+        }
+    }
+
+    #[test]
+    fn message_escaping_is_lossless_and_reversible() {
+        let samples: &[&[u8]] = &[
+            b"",
+            b"geometry refused: atom 0 too far",
+            b"caf\xc3\xa9",
+            b"bad \xff\xfe byte",
+            b"literal \\xff \\\\ \x01\x7f\x80\xff",
+            b"\xf0\x9f\x98",
+        ];
+        for &raw in samples {
+            let encoded = decode_message(raw);
+            assert_eq!(unescape_message(&encoded), raw);
+        }
+
+        let mut small = [0x7f as c_char; 5];
+        write_message(small.as_mut_ptr(), 5, "café");
+        // "café" is 5 UTF-8 bytes; cap=5 leaves room for 4 bytes, which splits "é",
+        // so truncation stops at "caf" (3 bytes + NUL).
+        let written = unsafe { CStr::from_ptr(small.as_ptr()) }
+            .to_str()
+            .expect("truncated buffer must stay valid UTF-8");
+        assert_eq!(written, "caf");
     }
 }

@@ -69,6 +69,7 @@ typedef int32_t (*EindirTryEvalFn)(void *user_data,
   Statuses =1= and =2= mean invalid parameter and internal error, and the others belong to the callback.
 - =eindir_try_objective_eval= and =eindir_try_objective_grad= return the callback's status, copy the message into the caller's buffer (truncated to fit, and NULL is allowed) and also record it for =eindir_last_error()=.
   The old entry points leave =eindir_last_error()= alone after a callback fails, and these do not.
+- Callback messages are decoded losslessly before surfacing in =CallbackError=, =eindir_last_error()=, and =message_out=: valid UTF-8 sequences stay verbatim except that =\= is doubled to =\\=, and every invalid UTF-8 byte is escaped visibly as =\xhh= in lowercase hexadecimal so the original bytes up to the first NUL remain recoverable.
 - In Rust, =EindirTryObjectiveWrapper= implements the =Try*= traits with =Error = CallbackError { code, message }=, so a failure reaches a generic driver with both fields intact.
   Without a gradient callback =try_grad= fails with "no gradient callback"; the old wrapper returns zeros.
 - =eindir_core_abi_stamp()= reports ABI minor 2 and the feature bit =EINDIR_ABI_FEATURE_TRY_CALLBACKS=.
