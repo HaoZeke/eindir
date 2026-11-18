@@ -1,3 +1,5 @@
+"""Pure-Python bounds, position-value pairs and the objective base class."""
+
 import abc
 from dataclasses import dataclass
 

@@ -1,3 +1,6 @@
+"""Exceptions raised by the pure-Python components."""
+
+
 class OutOfBounds(ValueError):
     """
     Exception raised when a point is out of bounds.

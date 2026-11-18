@@ -12,7 +12,15 @@ use numpy::{PyArray1, PyArrayMethods, PyReadonlyArray1};
 use pyo3::exceptions::PyValueError;
 use pyo3::prelude::*;
 
-/// pyo3-exposed wrapper around `Bounds<f64>` constructed from numpy arrays.
+/// Box bounds ``[low, high]`` with a membership tolerance ``slack``.
+///
+/// ``low`` and ``high`` are contiguous 1-D float64 NumPy arrays of equal
+/// length; other inputs raise ``TypeError``. ``slack`` (default ``1e-6``, in
+/// the units of the coordinates) widens ``contains`` only.
+///
+/// Raises ``pyo3_runtime.PanicException``, which derives from
+/// ``BaseException``, when the lengths differ, ``slack`` is negative or
+/// ``low[i] > high[i]``.
 #[pyclass(name = "Bounds")]
 #[derive(Clone)]
 pub struct PyBounds {
@@ -35,21 +43,29 @@ impl PyBounds {
         })
     }
 
+    /// Number of dimensions.
     #[getter]
     fn dims(&self) -> usize {
         self.inner.dims
     }
 
+    /// Membership tolerance used by ``contains``.
     #[getter]
     fn slack(&self) -> f64 {
         self.inner.slack
     }
 
+    /// True when ``x`` has ``dims`` coordinates, each within ``slack`` of
+    /// the box. A point of the wrong length gives ``False``.
     fn contains<'py>(&self, x: PyReadonlyArray1<'py, f64>) -> PyResult<bool> {
         let slice = x.as_slice()?;
         Ok(self.inner.contains(ArrayView1::from(slice)))
     }
 
+    /// Returns a copy of ``x`` with each coordinate clipped to
+    /// ``[low[i], high[i]]``, ignoring ``slack``.
+    ///
+    /// Raises ``PanicException`` when ``len(x) != dims``.
     fn clip<'py>(
         &self,
         py: Python<'py>,
@@ -64,7 +80,7 @@ impl PyBounds {
     }
 }
 
-/// pyo3-exposed wrapper around `FPair<f64>`.
+/// A position ``pos`` (1-D float64 array) paired with its value ``val``.
 #[pyclass(name = "FPair")]
 #[derive(Clone)]
 pub struct PyFPair {
@@ -81,24 +97,29 @@ impl PyFPair {
         })
     }
 
+    /// The position, as a new NumPy array.
     #[getter]
     fn pos<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
         PyArray1::from_slice(py, self.inner.pos.as_slice().expect("Array1 is contiguous"))
     }
 
+    /// The objective value at ``pos``.
     #[getter]
     fn val(&self) -> f64 {
         self.inner.val
     }
 }
 
-/// Wraps a Python callable into the Rust `Objective<f64>` trait so the
-/// SA driver loop can call user-defined Python objectives without leaving
-/// Rust per evaluation.
+/// A Python callable as an objective over ``bounds``.
 ///
-/// When `grad_fn` is supplied at construction the object also implements
-/// `Gradient<f64>` (native / analytic gradient, Ceres-style). Without a
-/// supplied gradient, callers use `FiniteDiffGradient` explicitly.
+/// ``fn_(x)`` takes a 1-D float64 NumPy array and returns a float.
+/// ``grad_fn(x)``, when given, returns a 1-D float64 NumPy array of the same
+/// length. Rust code sees the object as ``Objective<f64>`` and
+/// ``Gradient<f64>``. Python has no finite-difference fallback: without
+/// ``grad_fn``, ``grad`` raises ``ValueError``.
+///
+/// The object is bound to the thread that created it; using it from another
+/// thread raises ``PanicException``.
 #[pyclass(name = "PyObjective", unsendable)]
 pub struct PyObjective {
     inner: Py<PyAny>,
@@ -121,6 +142,10 @@ impl PyObjective {
         }
     }
 
+    /// Calls ``fn_(x)`` and returns its result as a float.
+    ///
+    /// ``x`` must be a contiguous 1-D float64 array; its length is not
+    /// checked against ``dim``. An exception raised by ``fn_`` propagates.
     fn eval<'py>(&self, py: Python<'py>, x: PyReadonlyArray1<'py, f64>) -> PyResult<f64> {
         let slice = x.as_slice()?;
         let py_arr = PyArray1::from_slice(py, slice);
@@ -128,9 +153,9 @@ impl PyObjective {
         r.extract::<f64>(py)
     }
 
-    /// Native gradient (if one was supplied at construction).  Raises if
-    /// this PyObjective has no grad_fn; callers should use
-    /// FiniteDiffGradient in that case.
+    /// Calls ``grad_fn(x)`` and returns its result.
+    ///
+    /// Raises ``ValueError`` when the object was built without ``grad_fn``.
     fn grad<'py>(
         &self,
         py: Python<'py>,
@@ -138,7 +163,7 @@ impl PyObjective {
     ) -> PyResult<Bound<'py, PyArray1<f64>>> {
         let Some(g) = &self.grad else {
             return Err(PyValueError::new_err(
-                "PyObjective was constructed without a grad_fn; supply grad_fn=... for native gradients (Ceres style) or wrap with FiniteDiffGradient",
+                "PyObjective was constructed without a grad_fn; pass grad_fn=... to the constructor",
             ));
         };
         let slice = x.as_slice()?;
@@ -147,11 +172,13 @@ impl PyObjective {
         r.extract::<Bound<'py, PyArray1<f64>>>(py)
     }
 
+    /// Number of input dimensions, equal to ``bounds.dims``.
     #[getter]
     fn dim(&self) -> usize {
         self.dim
     }
 
+    /// A copy of the bounds.
     #[getter]
     fn bounds(&self) -> PyBounds {
         PyBounds {
@@ -212,7 +239,18 @@ impl Gradient<f64> for PyObjective {
 
 impl DifferentiableObjective<f64> for PyObjective {}
 
-/// Low-discrepancy points scaled to the supplied box bounds.
+/// Halton points scaled to the box ``[low, high]``, as a list of rows.
+///
+/// ``low`` and ``high`` are contiguous 1-D float64 arrays. Row ``r`` is
+/// Halton point ``skip + r``; ``skip=1`` (the default) avoids the corner
+/// ``low``. ``eindir.low_discrepancy_points`` wraps this and returns an
+/// ``(n, dims)`` array.
+///
+/// # Errors
+///
+/// Raises ``ValueError`` when the lengths differ, the arrays are empty or
+/// ``high[i] < low[i]``, and ``TypeError`` for a non-contiguous or non-float64
+/// array.
 #[pyfunction]
 #[pyo3(signature = (low, high, n, skip = 1))]
 pub fn low_discrepancy_points(
@@ -243,7 +281,14 @@ pub fn low_discrepancy_points(
     Ok(points.outer_iter().map(|row| row.to_vec()).collect())
 }
 
-/// Deterministically shifted low-discrepancy points scaled to box bounds.
+/// Halton points with a seeded Cranley-Patterson shift, scaled to the box.
+///
+/// The same ``seed`` gives the same points for a given build. Arguments as
+/// in ``low_discrepancy_points``; ``seed`` defaults to 0.
+///
+/// # Errors
+///
+/// As ``low_discrepancy_points``.
 #[pyfunction]
 #[pyo3(signature = (low, high, n, skip = 1, seed = 0))]
 pub fn shifted_low_discrepancy_points(

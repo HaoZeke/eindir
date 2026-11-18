@@ -7,7 +7,10 @@ use crate::py_objective::{
     PyBounds, PyFPair, PyObjective, low_discrepancy_points, shifted_low_discrepancy_points,
 };
 
-/// pyo3 module initialiser. Exposed to Python as `eindir._core`.
+/// The Rust extension of eindir, built from `eindir-core`.
+///
+/// It holds ``__version__``, ``Bounds``, ``FPair``, ``PyObjective``,
+/// ``low_discrepancy_points`` and ``shifted_low_discrepancy_points``.
 #[pymodule]
 fn _core(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;

@@ -1,3 +1,9 @@
+"""Optional TVM-FFI interop for arrays that implement DLPack.
+
+``tvm_ffi`` is not a dependency of eindir; ``tvm_ffi_tensor`` imports it on
+first use or takes a module-like object.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -9,6 +15,11 @@ from eindir.core.array_api import array_device
 
 @dataclass(frozen=True)
 class TvmFfiTensorMetadata:
+    """Shape, dtype and device of a DLPack array, read without converting it.
+
+    ``dlpack_device`` is ``None`` when the array has no ``__dlpack_device__``.
+    """
+
     shape: tuple[int, ...]
     dtype: str
     device: Any
@@ -47,6 +58,13 @@ def _tvm_ffi_module(tvm_ffi: Any | None) -> Any:
 
 
 def tvm_ffi_tensor(array: Any, *, tvm_ffi: Any | None = None) -> Any:
+    """Convert ``array`` to a TVM-FFI tensor with ``tvm_ffi.from_dlpack``.
+
+    ``tvm_ffi`` defaults to the installed ``tvm_ffi`` module. Raises
+    ``TypeError`` when ``array`` lacks ``__dlpack__`` or the module lacks
+    ``from_dlpack``, and ``ModuleNotFoundError`` when no module is given and
+    ``tvm_ffi`` is not installed.
+    """
     _require_dlpack(array)
     module = _tvm_ffi_module(tvm_ffi)
     from_dlpack = getattr(module, "from_dlpack", None)
@@ -56,6 +74,10 @@ def tvm_ffi_tensor(array: Any, *, tvm_ffi: Any | None = None) -> Any:
 
 
 def tvm_ffi_tensor_metadata(array: Any) -> TvmFfiTensorMetadata:
+    """Return the shape, dtype and device of a DLPack array.
+
+    Raises ``TypeError`` when ``array`` lacks ``__dlpack__``.
+    """
     _require_dlpack(array)
     return TvmFfiTensorMetadata(
         shape=tuple(int(dim) for dim in getattr(array, "shape", ())),

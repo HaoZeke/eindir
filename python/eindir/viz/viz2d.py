@@ -1,3 +1,8 @@
+"""2-D surface and contour plots of an ``ObjectiveFunction``.
+
+Needs the ``plotter`` extra: ``pip install "eindir[plotter]"``.
+"""
+
 import matplotlib.pyplot as plt
 import numpy as np
 from cmcrameri import cm

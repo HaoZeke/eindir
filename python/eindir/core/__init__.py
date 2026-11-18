@@ -1,3 +1,8 @@
+"""Pure-Python components: Array API and TVM-FFI helpers.
+
+The bounds and objective classes live in ``eindir.core.components``.
+"""
+
 from eindir.core.array_api import (
     ArrayPlacement,
     array_device,
