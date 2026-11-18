@@ -188,3 +188,103 @@ fn central_differences_over_a_fallible_objective_stop_at_the_error() {
         })
     );
 }
+
+#[cfg(feature = "capi")]
+mod capi {
+    use super::*;
+    use dlpk::sys::{
+        DLDataType, DLDataTypeCode, DLDevice, DLDeviceType, DLManagedTensorVersioned,
+        DLPackVersion, DLTensor,
+    };
+    use eindir_core::ffi_try::{
+        CallbackError, EINDIR_TRY_SUCCESS, EindirTryObjectiveWrapper, eindir_try_objective_free,
+        eindir_try_objective_new,
+    };
+    use std::ffi::{c_char, c_void};
+
+    const ENGINE_DOWN: i32 = 42;
+
+    unsafe extern "C" fn flaky_eval(
+        user_data: *mut c_void,
+        x: *const DLManagedTensorVersioned,
+        value_out: *mut f64,
+        message_out: *mut c_char,
+        message_cap: usize,
+    ) -> i32 {
+        let calls = unsafe { &mut *user_data.cast::<u32>() };
+        *calls += 1;
+        if *calls > 2 {
+            let text = b"engine went away\0";
+            assert!(message_cap >= text.len());
+            unsafe { std::ptr::copy_nonoverlapping(text.as_ptr().cast(), message_out, text.len()) };
+            return ENGINE_DOWN;
+        }
+        let t = unsafe { &(*x).dl_tensor };
+        let n = unsafe { *t.shape } as usize;
+        let xs = unsafe { std::slice::from_raw_parts(t.data as *const f64, n) };
+        unsafe { *value_out = xs.iter().sum() };
+        EINDIR_TRY_SUCCESS
+    }
+
+    #[test]
+    fn a_callback_status_and_message_reach_a_generic_driver() {
+        fn first_two_evals<O>(obj: &O) -> Result<Vec<f64>, O::Error>
+        where
+            O: TryObjective<f64> + ?Sized,
+        {
+            let a = obj.try_eval(array![1.0, 2.0].view())?;
+            let b = obj.try_eval(array![3.0, 4.0].view())?;
+            let c = obj.try_eval(array![5.0, 6.0].view())?;
+            Ok(vec![a, b, c])
+        }
+
+        let mut calls = 0_u32;
+        let mut low = [-9.0_f64; 2];
+        let mut high = [9.0_f64; 2];
+        let shape = [2_i64];
+        let tensor = |data: &mut [f64; 2]| DLManagedTensorVersioned {
+            version: DLPackVersion { major: 1, minor: 0 },
+            manager_ctx: std::ptr::null_mut(),
+            deleter: None,
+            flags: 0,
+            dl_tensor: DLTensor {
+                data: data.as_mut_ptr().cast(),
+                device: DLDevice {
+                    device_type: DLDeviceType::kDLCPU,
+                    device_id: 0,
+                },
+                ndim: 1,
+                dtype: DLDataType {
+                    code: DLDataTypeCode::kDLFloat,
+                    bits: 64,
+                    lanes: 1,
+                },
+                shape: shape.as_ptr().cast_mut(),
+                strides: std::ptr::null_mut(),
+                byte_offset: 0,
+            },
+        };
+        let low_t = tensor(&mut low);
+        let high_t = tensor(&mut high);
+        let handle = unsafe {
+            eindir_try_objective_new(
+                2,
+                &low_t,
+                &high_t,
+                flaky_eval,
+                None,
+                (&mut calls as *mut u32).cast(),
+                None,
+            )
+        };
+        assert!(!handle.is_null());
+        let wrapper = unsafe { EindirTryObjectiveWrapper::new(&*handle) };
+        let outcome = first_two_evals(&wrapper);
+        assert_eq!(
+            outcome,
+            Err(CallbackError::new(ENGINE_DOWN, "engine went away"))
+        );
+        assert_eq!(calls, 3);
+        unsafe { eindir_try_objective_free(handle) };
+    }
+}

@@ -22,6 +22,10 @@ pub mod features;
 #[cfg(feature = "capi")]
 #[allow(non_camel_case_types)]
 pub mod ffi;
+/// Fallible C callbacks (status code plus message), gated behind `capi`.
+#[cfg(feature = "capi")]
+#[allow(non_camel_case_types)]
+pub mod ffi_try;
 /// Position-value pairs.
 pub mod fpair;
 /// Generalized Langevin equation colored-noise thermostat (optimal sampling).
@@ -72,4 +76,9 @@ pub use reduced::{ChebyshevSurrogate, ReducedObjective};
 pub use ffi::{
     EindirEvalFn, EindirFreeFn, EindirGradFn, EindirObjectiveWrapper, eindir_abi_stamp_t,
     eindir_objective_descriptor_t, eindir_objective_t,
+};
+#[cfg(feature = "capi")]
+pub use ffi_try::{
+    CallbackError, EindirTryEvalFn, EindirTryGradFn, EindirTryObjectiveWrapper,
+    eindir_try_objective_t,
 };

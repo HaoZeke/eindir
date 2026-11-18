@@ -1,6 +1,7 @@
 #include <dlpack/dlpack.h>
 #include <eindir-core.hpp>
 
+#include <cstdint>
 #include <type_traits>
 
 #if DLPACK_MAJOR_VERSION != 1
@@ -22,6 +23,11 @@ static_assert(std::is_same<EindirEvalFn,
                                                const DLManagedTensorVersioned *,
                                                double *)>::value,
               "EindirEvalFn must take the DLPack tensor type");
+static_assert(std::is_same<EindirTryEvalFn,
+                           std::int32_t (*)(void *,
+                                            const DLManagedTensorVersioned *,
+                                            double *, char *, std::uintptr_t)>::value,
+              "EindirTryEvalFn must return an int32_t status and take a message buffer");
 
 int main() {
     const char *(*version_api)() noexcept = eindir::version;

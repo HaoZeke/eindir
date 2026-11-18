@@ -7,7 +7,7 @@ compatibility: Rust 1.88 or newer with cargo-c 0.10.17 or newer, DLPack 1.0 head
 
 # The C library
 
-The C library exports fifteen functions: version and ABI queries, the objective handle (`eindir_objective_new`, `_free`, `_dim`, `_has_grad`, `_bounds_low`, `_bounds_high`, `_eval`, `_grad`), semantic descriptors and `eindir_last_error`.
+The C library exports twenty-one functions: version and ABI queries, the objective handle (`eindir_objective_new`, `_free`, `_dim`, `_has_grad`, `_bounds_low`, `_bounds_high`, `_eval`, `_grad`), the fallible handle (`eindir_try_objective_new`, `_free`, `_dim`, `_has_grad`, `_eval`, `_grad`), semantic descriptors and `eindir_last_error`.
 Points, gradients and bounds cross the boundary as DLPack 1.0 `DLManagedTensorVersioned` tensors that the caller owns and lends for the length of one call.
 The C and C++ blocks are excerpts of `assets/objective_demo.c` and `assets/raii_demo.cpp`, which `scripts/build_and_run.py` compiles and runs.
 
@@ -98,6 +98,43 @@ static double *elements(const struct DLManagedTensorVersioned *t) {
   `grad_fn` may be NULL: then `eindir_objective_has_grad` returns 0 and `eindir_objective_grad` returns `EINDIR_INVALID_PARAMETER` with "no gradient callback".
 - Rust drivers see a C objective through `EindirObjectiveWrapper` in `src/ffi.rs`.
   It turns a failed value callback into NaN, returns zeros when there is no gradient callback, and ignores the status of the gradient callback.
+
+## Callbacks that can say why they failed
+
+The callbacks above return one of three statuses and cannot set a message.
+`eindir_try_objective_new` takes `EindirTryEvalFn` and `EindirTryGradFn` callbacks instead, which return an `int32_t` (0 is success, anything else a failure) and write a NUL-terminated message into the `message_out` buffer of `message_cap` bytes that eindir lends them.
+`eindir_try_objective_eval` and `_grad` return the callback's status, copy the message to the buffer you pass (NULL is allowed) and record it for `eindir_last_error()`.
+
+```c
+static int32_t try_sphere_eval(void *user_data,
+                               const struct DLManagedTensorVersioned *x,
+                               double *value_out, char *message_out,
+                               uintptr_t message_cap) {
+    const double *xs;
+    double sum = 0.0;
+    int i;
+    (void)user_data;
+    if (!is_f64_vector(x, DIM)) {
+        snprintf(message_out, message_cap, "x is not a float64 vector of length %d",
+                 DIM);
+        return EINDIR_TRY_INVALID_PARAMETER;
+    }
+    xs = elements(x);
+    if (xs[0] > 10.0) {
+        snprintf(message_out, message_cap, "geometry refused: x[0] = %g", xs[0]);
+        return SPHERE_REFUSED;
+    }
+```
+
+```c
+    status = eindir_try_objective_eval(tried, &far_t, &f, message, sizeof message);
+    CHECK(status == SPHERE_REFUSED, "the callback's own status comes back");
+    CHECK(strcmp(eindir_last_error(), message) == 0,
+          "the message is also the last error");
+```
+
+`eindir_objective_t` and its callbacks are unchanged, and the library advertises `EINDIR_ABI_FEATURE_TRY_CALLBACKS`.
+Rust drivers see the new handle through `EindirTryObjectiveWrapper`, whose error is a `CallbackError` with the status and the message.
 
 ## Ownership
 
