@@ -389,7 +389,7 @@ where
     fn value_and_gradient(&self, x: ArrayView1<T>) -> (T, Array1<T>) {
         match self.inner.try_value_and_gradient(x) {
             Ok(pair) => pair,
-            Err(error) => panic!("objective evaluation failed: {error:?}"),
+            Err(error) => panic!("value and gradient evaluation failed: {error:?}"),
         }
     }
 }
@@ -811,6 +811,101 @@ mod tests {
             .downcast_ref::<String>()
             .expect("a formatted panic message");
         assert!(message.contains("Refused"), "{message}");
+    }
+
+    struct GradFailure {
+        bounds: Bounds<f64>,
+    }
+
+    impl TryObjective<f64> for GradFailure {
+        type Error = EngineError;
+
+        fn dims(&self) -> usize {
+            self.bounds.dims
+        }
+
+        fn domain(&self) -> &Bounds<f64> {
+            &self.bounds
+        }
+
+        fn try_eval(&self, x: ArrayView1<f64>) -> Result<f64, EngineError> {
+            Ok(x.dot(&x))
+        }
+    }
+
+    impl TryGradient<f64> for GradFailure {
+        type GradError = EngineError;
+
+        fn try_grad(&self, _x: ArrayView1<f64>) -> Result<Array1<f64>, EngineError> {
+            Err(EngineError::NonFinite)
+        }
+
+        fn grad_dims(&self) -> usize {
+            self.bounds.dims
+        }
+    }
+
+    impl TryDifferentiableObjective<f64> for GradFailure {}
+
+    #[test]
+    fn panic_on_error_distinguishes_value_and_gradient_failures() {
+        let engine = PanicOnError::new(Engine::new(2));
+        let eval_panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            engine.eval(array![11.0, 0.0].view())
+        }))
+        .expect_err("eval failure must panic");
+        let eval_msg = eval_panic
+            .downcast_ref::<String>()
+            .expect("formatted panic message");
+        assert!(
+            eval_msg.starts_with("objective evaluation failed: ") && eval_msg.contains("Refused"),
+            "{eval_msg}"
+        );
+
+        let grad_panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            engine.grad(array![11.0, 0.0].view())
+        }))
+        .expect_err("grad failure must panic");
+        let grad_msg = grad_panic
+            .downcast_ref::<String>()
+            .expect("formatted panic message");
+        assert!(
+            grad_msg.starts_with("gradient evaluation failed: ") && grad_msg.contains("Refused"),
+            "{grad_msg}"
+        );
+
+        let grad_only = PanicOnError::new(GradFailure {
+            bounds: Bounds::new(array![-5.0, -5.0], array![5.0, 5.0], 0.0),
+        });
+        let vg_grad_panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            grad_only.value_and_gradient(array![1.0, 2.0].view())
+        }))
+        .expect_err("gradient failure inside value_and_gradient must panic");
+        let vg_grad_msg = vg_grad_panic
+            .downcast_ref::<String>()
+            .expect("formatted panic message");
+        assert!(
+            vg_grad_msg.starts_with("value and gradient evaluation failed: ")
+                && vg_grad_msg.contains("NonFinite"),
+            "{vg_grad_msg}"
+        );
+        assert!(
+            !vg_grad_msg.contains("objective evaluation failed"),
+            "{vg_grad_msg}"
+        );
+
+        let vg_eval_panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            engine.value_and_gradient(array![11.0, 0.0].view())
+        }))
+        .expect_err("value failure inside value_and_gradient must panic");
+        let vg_eval_msg = vg_eval_panic
+            .downcast_ref::<String>()
+            .expect("formatted panic message");
+        assert!(
+            vg_eval_msg.starts_with("value and gradient evaluation failed: ")
+                && vg_eval_msg.contains("Refused"),
+            "{vg_eval_msg}"
+        );
     }
 
     #[test]
