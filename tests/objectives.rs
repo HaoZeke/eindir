@@ -58,7 +58,7 @@ fn rosenbrock_global_min_at_ones() {
 fn ackley_global_min_at_origin() {
     let obj = Ackley::<5>::new();
     let v = obj.eval(Array1::zeros(5).view());
-    assert!(v.abs() < 1e-9, "ackley(0) was {}", v);
+    assert!(v.abs() < 1e-9, "ackley(0) was {v}");
 }
 
 #[test]
