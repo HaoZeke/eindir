@@ -900,6 +900,27 @@ def src_header(args: str) -> tuple[str, dict[str, str]]:
     return SRC_LANGS.get(lang.lower(), lang.lower()), params
 
 
+def org_include(args: str, ctx: Context) -> list[str]:
+    """``#+INCLUDE: "file" src LANG`` as a fenced block of the file's text.
+
+    ``export markdown`` inlines the file; anything else becomes a plain
+    fence. A missing file is named instead of included.
+    """
+    m = re.match(r'\s*"([^"]+)"\s*(.*)$', args) or re.match(r"\s*(\S+)\s*(.*)$", args)
+    if not m:
+        return []
+    target = (ctx.source.parent / m.group(1)).resolve()
+    rel = ctx.repo_rel(target) or m.group(1)
+    if not target.is_file():
+        return ["", f"(Included file: `{rel}`.)", ""]
+    body = target.read_text(encoding="utf-8").splitlines()
+    kind = m.group(2).split()
+    if kind[:1] == ["export"] and kind[1:2] == ["markdown"]:
+        return ["", *body, ""]
+    lang = SRC_LANGS.get(kind[1].lower(), kind[1].lower()) if kind[:1] == ["src"] and len(kind) > 1 else ""
+    return ["", *fence(lang, body), ""]
+
+
 def unescape_org_block(lines: list[str]) -> list[str]:
     return [re.sub(r"^(\s*),(\*|#\+|,)", r"\1\2", line) for line in lines]
 
@@ -972,6 +993,8 @@ def org_to_md(text: str, ctx: Context, level: int, page_title: str = "") -> list
             flush()
             if km.group(1).lower() == "caption":
                 caption = km.group(2).strip()
+            elif km.group(1).lower() == "include":
+                out += org_include(km.group(2), ctx)
             i += 1
             continue
         if re.match(r"^\s*#(\s|$)", line):
