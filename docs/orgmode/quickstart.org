@@ -7,55 +7,71 @@ Quickstart
 ==========
 #+end_export
 
-This page walks through the main primitives with minimal runnable examples.
+This page evaluates a function at eight well-spread points in a box, first from Python and then from Rust.
+Both draw the same Halton points and find the same best start.
 
-* Installation
+* Install
 
-** Python (pip)
+Python:
+
 #+BEGIN_SRC bash
 pip install eindir
 #+END_SRC
 
-** Pixi (development)
-#+BEGIN_SRC bash
-pixi install
-pixi run -e python python-test
+Rust, in =Cargo.toml=:
+
+#+BEGIN_SRC toml
+[dependencies]
+eindir-core = "0.6"
+ndarray = "0.17"
 #+END_SRC
 
-* Hello eindir (Objective + low-discrepancy)
+The newest release on crates.io is 0.6.0 and on PyPI 0.5.1.
+For the main branch, use =eindir-core = { git = "https://github.com/HaoZeke/eindir" }= or run =maturin develop --features python= in a checkout.
+[[file:howto/install.org][Installation]] has the other routes.
+
+* Python
+
+=_core.Bounds= is a box and =_core.PyObjective= wraps a Python function as an objective over it.
+=eindir.low_discrepancy_points= returns Halton points in the box as an =(n, d)= array.
 
 #+BEGIN_SRC python
 import numpy as np
-from eindir import low_discrepancy_points, Bounds
+import eindir
+from eindir import _core
 
-# Define a simple bounded objective (Rastrigin in 2D)
 low = np.array([-5.12, -5.12])
 high = np.array([5.12, 5.12])
-bounds = Bounds(low, high, 0.0)  # dummy for example; real use supplies eval
+obj = _core.PyObjective(lambda x: float(np.sum((x - 1.0) ** 2)), _core.Bounds(low, high))
 
-# Low-discrepancy starts (Halton-based, reproducible)
-starts = low_discrepancy_points(low, high, 4, skip=1)
-print("Starts shape:", starts.shape)
-print(starts)
+starts = eindir.low_discrepancy_points(low, high, 8)
+values = [obj.eval(row) for row in starts]
+best = int(np.argmin(values))
+print(starts[best], values[best])
 #+END_SRC
 
-See the tutorials for full Objective trait usage, GLE, and surrogates.
+#+BEGIN_EXAMPLE
+[1.28       2.84444444] 3.480375308641971
+#+END_EXAMPLE
 
-* GLE thermostat (standalone)
+=_core= takes contiguous float64 NumPy arrays only; =eindir.low_discrepancy_points= converts lists for you.
 
-#+BEGIN_SRC python
-from eindir import GleThermostat, optimal_sampling_drift
-import numpy as np
+* Rust
 
-drift = optimal_sampling_drift(omega0=0.2)
-gle = GleThermostat.canonical(drift, dt=0.01, temperature=1.0, mass=1.0)
-# Use with your own BAB loop or via anneal.gle_langevin
-print("GLE thermostat ready, ns auxiliary momenta:", drift.shape[0]-1)
-#+END_SRC
+An objective is a type that implements =Objective<f64>=: its dimension, its bounds and its value.
+=eval_batch= evaluates the rows of a 2-D array.
+
+#+INCLUDE: "../../examples/quickstart.rs" src rust
+
+#+BEGIN_EXAMPLE
+[1.2800000000000002, 2.844444444444443] 3.480375308641971
+#+END_EXAMPLE
+
+The file is =examples/quickstart.rs=, and =cargo run --example quickstart= runs it.
 
 * Next steps
 
-- [[file:tutorials/quickstart.org][tutorials/quickstart]] for a full Python Objective example.
-- [[file:tutorials/gle-thermostat.org][GLE thermostat tutorial]].
-- [[file:tutorials/surrogates.org][Surrogates tutorial]] (additive rank-1 + Chebyshev).
-- [[file:howto/using-with-anneal.org][Using with anneal]] for the five-component algebra.
+- [[file:tutorials/quickstart.org][Quickstart with Python]] adds a gradient and the pure-Python classes.
+- [[file:tutorials/low-discrepancy.org][Low-discrepancy points]] covers shifted and corner-anchored designs.
+- [[file:tutorials/gle-thermostat.org][GLE thermostat]] and [[file:tutorials/surrogates.org][Surrogates]] are Rust-only.
+- [[file:howto/c-objective.org][Objectives through the C ABI]] passes a C function to Rust code.

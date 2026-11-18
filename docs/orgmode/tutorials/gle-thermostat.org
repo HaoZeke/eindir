@@ -1,45 +1,40 @@
-#+TITLE: GLE coloured-noise thermostat
+#+TITLE: GLE thermostat
 #+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
 
 #+begin_export rst
-===============================
-GLE coloured-noise thermostat
-===============================
-
-White-noise Langevin critically damps only one frequency. For ill-conditioned
-objectives (wide spread of Hessian eigenvalues) most modes are far from
-critical and decorrelate slowly.
-
-The GLE (Ceriotti-Bussi-Parrinello form) replaces white noise with coloured
-noise generated from auxiliary momenta whose drift matrix shapes a
-frequency-dependent friction. A well-chosen drift (optimal-sampling) makes
-efficiency nearly flat across a target band.
+==============
+GLE thermostat
+==============
 #+end_export
 
-* API (from eindir)
+This tutorial builds the coloured-noise thermostat of the generalized Langevin equation (GLE), starts it at equilibrium and checks that the momenta keep their thermal variance.
+The thermostat is Rust-only; Python has no binding for it.
+[[file:../explanation/gle.org][The GLE thermostat]] explains what it computes and why.
 
-#+begin_src python
-from eindir import GleThermostat, optimal_sampling_drift, matrix_exp, ldl_sqrt
-import numpy as np
+* The program
 
-drift = optimal_sampling_drift(omega0=0.2)   # covers [omega0, 100*omega0]
-gle = GleThermostat.canonical(drift, dt=0.01, temperature=1.0, mass=1.0)
+#+INCLUDE: "../../../examples/gle_thermostat.rs" src rust
 
-# Stationary sample for auxiliary state (ns+1, dim)
-ns = drift.shape[0] - 1
-c = np.eye(ns+1) * 1.0   # temperature-scaled covariance
-s = gle.sample_stationary(c, dim=2, mass=1.0)  # (ns+1, 2)
-#+end_src
+=cargo run --example gle_thermostat= prints a value near 1:
 
-* Usage patterns
+#+BEGIN_EXAMPLE
+<p^2> = 0.970 over 20000 steps, kB T = 1
+#+END_EXAMPLE
 
-- Standalone thermostat in custom integrators.
-- Via =anneal.gle_langevin= (full annealing driver, epoch-wise temperature, gradient-driven BAB + GLE).
-- The same drift matrix is reusable; correctness is set by the covariance C, acceleration by the drift A (a-la-carte decoupling).
+* What each call does
 
-See the source comments in =eindir/src/gle.rs= and =anneal/src/methods/gle_langevin.rs= for the BAB propagator, matrix_exp (Taylor + scaling-squaring), and ldl_sqrt (stabilized for small dt).
+- =optimal_sampling_drift(omega0)= returns the drift matrix =A=, square of size =OPTIMAL_SAMPLING_NS + 1= (13).
+  It is a fitted reference scaled by =omega0=, so the band it damps evenly is =[omega0, 100 omega0]=.
+  Pick =omega0= near the slowest frequency you want to sample, in inverse units of =dt=.
+- =GleThermostat::canonical(&drift, dt, temperature, kb)= precomputes the propagator =T = exp(-dt A)= and the noise factor =S= for one step.
+  The fourth argument is Boltzmann's constant, not a mass; there is no mass argument because the state holds mass-scaled momenta.
+- =sample_stationary(&c, dim, kb, &mut rng)= draws a state of shape =(ns + 1, dim)= from the stationary law =N(0, kb c)=.
+  Pass the covariance the thermostat was built with, =temperature * I= for =canonical=.
+- =step(&mut state.view_mut(), &mut rng)= applies =s <- T s + S xi= in place.
+  Row 0 is the physical momentum of each coordinate and rows 1 to =ns= are the auxiliary momenta.
 
-* Tie-in to anneal
+* In an integrator
 
-The GLE driver occupies the =Move= slot of the five-component algebra.
-One fitted drift therefore accelerates every gradient-capable driver (plain SA, HMC, Bayesian mixer, ...) with no per-driver code.
+The thermostat only updates momenta, and each call to =step= advances them by the =dt= it was built with.
+Call it once per timestep between the force kicks of your integrator, or build it with =dt / 2= and call it before and after the kicks for a symmetric splitting.
+The anneal GLE driver does this; [[file:../howto/using-with-anneal.org][Using with anneal]] says where it plugs in.

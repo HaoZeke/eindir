@@ -1,23 +1,39 @@
-#+TITLE: The Primitives (traits & design)
-#+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
+#+TITLE: The primitives
+#+OPTIONS: toc:nil todo:nil num:nil author:nil ^:nil
 
-* Objective
-The central abstraction: a callable with bounds, optional gradient, and a protocol that both Rust and Python sides understand.
-Everything else (low-disc, GLE, surrogates, anneal drivers) is built to consume or produce Objectives.
+eindir is a small set of pieces that optimisers and samplers share.
+Each piece is a trait or a plain function, so a driver can combine them without depending on any other driver.
 
-** Fallible evaluation
-=Objective::eval= cannot fail.
-A surface that can fail implements =TryObjective= and =TryGradient= instead, with an error type of its own that reaches the caller unchanged; every =Objective= is already one, with =Error = Infallible=.
-See [[file:fallible-objectives.org][Fallible objectives]].
+* Objectives and bounds
 
-* Low-discrepancy
-Reproducible, well-spaced designs that avoid the clustering of random samples.
-Used for everything from mixer initialisation to surrogate pilots.
+=Objective<T>= is a function from a box in R^D to a number: =dim=, =bounds= and =eval=, with =eval_batch= and =global_min= as provided methods.
+=Bounds<T>= is the box, with a slack that =contains= allows outside it, =clip= and a random =mkpoint=.
+Everything else either consumes an objective (drivers, point sets that feed them) or produces one (surrogates, reduced objectives, wrappers of Python and C functions).
 
-* GLE
-Coloured noise via auxiliary momenta + drift matrix.
-The optimal-sampling construction (from the same primitives) gives a drift that flattens efficiency; the user only chooses the band (omega0) and timestep.
+The trait cannot fail and has no gradient.
+Gradients come from a separate trait, =Gradient<T>=, so that an objective without one is still a complete objective, and =DifferentiableObjective<T>= joins the two with a fused =value_and_gradient=.
+Failure comes from a separate family, =TryObjective= and its relatives, so that an infallible objective pays nothing for it; see [[file:fallible-objectives.org][Fallible objectives]].
+
+=eval_batch_parallel= evaluates rows with rayon from =EVAL_BATCH_PARALLEL_MIN= rows up.
+It needs =Sync= objectives, which every =Objective= is, and keeps the row order.
+
+* Point sets
+
+Halton designs are deterministic and well spread; they seed starts, pilots and surrogate fits.
+See [[file:low-discrepancy.org][Low-discrepancy point sets]].
+
+* The GLE thermostat
+
+A momentum thermostat with coloured noise that samples a band of frequencies evenly, for gradient-based samplers.
+See [[file:gle.org][The GLE thermostat]].
 
 * Surrogates
-Cheap stand-ins that can be promoted to first-class citizens (Obj or Move slot) because the true objective is still used for the acceptance decision or the reported answer.
-This is the unification that lets one fitted model serve evaluation, proposal, and (via tempering) cooling.
+
+Cheap models fitted on a pilot design that implement =Objective= themselves.
+See [[file:surrogates.org][Surrogates]].
+
+* Bindings
+
+The Python extension wraps a Python function as =PyObjective= and exposes the point sets.
+The C ABI wraps a C function as =eindir_objective_t=, which Rust code sees as an =Objective= through =EindirObjectiveWrapper=.
+See [[file:c-abi.org][The C ABI]] and [[file:../reference/api-primitives.org][Python API]].

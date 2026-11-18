@@ -62,7 +62,24 @@ fn nth_prime(index: usize) -> u64 {
 
 /// Radical inverse of `index` in the given integer `base`.
 ///
-/// This is the one-dimensional building block of Halton point sets.
+/// Writes `index` in base `base` and mirrors the digits about the radix
+/// point, giving a value in `[0, 1)`. This is the van der Corput sequence,
+/// the one-dimensional building block of Halton point sets.
+///
+/// # Panics
+///
+/// Panics when `base < 2`.
+///
+/// # Examples
+///
+/// ```
+/// use eindir_core::radical_inverse;
+///
+/// assert_eq!(radical_inverse(0, 2), 0.0);
+/// assert_eq!(radical_inverse(1, 2), 0.5);
+/// assert_eq!(radical_inverse(3, 2), 0.75);
+/// assert_eq!(radical_inverse(1, 3), 1.0 / 3.0);
+/// ```
 pub fn radical_inverse(mut index: u64, base: u64) -> f64 {
     assert!(base >= 2, "radical inverse base must be at least 2");
     let inv_base = 1.0 / base as f64;
@@ -76,16 +93,48 @@ pub fn radical_inverse(mut index: u64, base: u64) -> f64 {
     value
 }
 
-/// A single `dim`-dimensional Halton point in the unit hypercube.
+/// The Halton point of number `index` in the unit hypercube `[0, 1)^dim`.
+///
+/// Axis `i` is the radical inverse of `index` in the `i`-th prime
+/// (2, 3, 5, ...). Index 0 is the origin. Primes beyond the first 32 are
+/// computed once and cached for the life of the process.
+///
+/// # Examples
+///
+/// ```
+/// use eindir_core::halton_unit;
+/// use ndarray::array;
+///
+/// assert_eq!(halton_unit(1, 2), array![0.5, 1.0 / 3.0]);
+/// ```
 pub fn halton_unit(index: u64, dim: usize) -> Array1<f64> {
     Array1::from_iter((0..dim).map(|axis| radical_inverse(index, nth_prime(axis))))
 }
 
 /// A Halton point set scaled to the supplied box bounds.
 ///
-/// `skip` controls the first Halton index. Use `skip = 1` to avoid the origin.
-/// Large designs (`n >= 64`) fill rows in parallel after warming the shared
-/// prime table.
+/// Returns an `n x bounds.dims` array whose row `r` is
+/// `low + (high - low) * halton_unit(skip + r, dims)`. `skip` is the first
+/// Halton index; `skip = 1` avoids the corner `low`. `bounds.slack` is not
+/// used. Designs of 64 rows or more fill rows in parallel with Rayon, and
+/// the result does not depend on the thread count.
+///
+/// # Panics
+///
+/// Panics when `high[i] < low[i]` on any axis, which [`Bounds::new`]
+/// already refuses.
+///
+/// # Examples
+///
+/// ```
+/// use eindir_core::{Bounds, halton_points};
+/// use ndarray::array;
+///
+/// let b = Bounds::new(array![0.0, -1.0], array![2.0, 1.0], 0.0);
+/// let pts = halton_points(&b, 3, 1);
+/// assert_eq!(pts.shape(), &[3, 2]);
+/// assert_eq!(pts.row(0), array![1.0, -1.0 + 2.0 / 3.0]);
+/// ```
 pub fn halton_points(bounds: &Bounds<f64>, n: usize, skip: u64) -> Array2<f64> {
     let dim = bounds.dims;
     if dim > 0 {
@@ -120,6 +169,24 @@ pub fn halton_points(bounds: &Bounds<f64>, n: usize, skip: u64) -> Array2<f64> {
 }
 
 /// Default bounded low-discrepancy design used by optimization front-ends.
+///
+/// Currently the same as [`halton_points`]; front-ends call this name so
+/// the default design can change without touching them. The Python
+/// function of the same name calls it.
+///
+/// # Panics
+///
+/// As [`halton_points`].
+///
+/// # Examples
+///
+/// ```
+/// use eindir_core::{Bounds, halton_points, low_discrepancy_points};
+/// use ndarray::array;
+///
+/// let b = Bounds::new(array![-5.12, -5.12], array![5.12, 5.12], 1e-6);
+/// assert_eq!(low_discrepancy_points(&b, 8, 1), halton_points(&b, 8, 1));
+/// ```
 pub fn low_discrepancy_points(bounds: &Bounds<f64>, n: usize, skip: u64) -> Array2<f64> {
     halton_points(bounds, n, skip)
 }
@@ -128,7 +195,12 @@ pub fn low_discrepancy_points(bounds: &Bounds<f64>, n: usize, skip: u64) -> Arra
 ///
 /// The shift is applied in the unit hypercube modulo one, then scaled to the
 /// target box. This gives a deterministic replicated design for randomized-QMC
-/// style restarts while preserving bounded points.
+/// style restarts while preserving bounded points. `shift` holds one value
+/// per axis, normally in `[0, 1)`.
+///
+/// # Panics
+///
+/// Panics when `shift.len() != bounds.dims`, and as [`halton_points`].
 pub fn shifted_halton_points(
     bounds: &Bounds<f64>,
     n: usize,
@@ -179,7 +251,13 @@ pub fn shifted_halton_points(
 ///
 /// The supplied seed chooses a reproducible Cranley-Patterson style shift in
 /// the unit hypercube. Different seeds give independent replicas of the same
-/// underlying low-discrepancy design.
+/// underlying low-discrepancy design. The shift comes from
+/// `rand::rngs::StdRng`, so the points for a given seed can change when the
+/// `rand` crate changes its generator.
+///
+/// # Panics
+///
+/// As [`halton_points`].
 pub fn shifted_low_discrepancy_points(
     bounds: &Bounds<f64>,
     n: usize,
@@ -201,9 +279,31 @@ fn vertex_count_for_design(dim: usize, n: usize) -> Option<usize> {
 
 /// Boundary-anchored bounded low-discrepancy design.
 ///
-/// The design starts with all box vertices when the requested size can hold
-/// them. For larger boxes it anchors the two diagonal vertices and keeps the
-/// remaining rows as the Halton design.
+/// Starts from [`halton_points`] and overwrites the first rows:
+///
+/// - when `2^dims <= n`, rows `0..2^dims` become the box vertices and, if a
+///   row remains, row `2^dims` becomes the box centre;
+/// - otherwise row 0 becomes `low`, row 1 `high` and row 2 the centre, as
+///   far as `n` allows.
+///
+/// The other rows keep their Halton values.
+///
+/// # Panics
+///
+/// As [`halton_points`].
+///
+/// # Examples
+///
+/// ```
+/// use eindir_core::{Bounds, boundary_anchored_low_discrepancy_points};
+/// use ndarray::array;
+///
+/// let b = Bounds::new(array![0.0, 0.0], array![1.0, 1.0], 0.0);
+/// let pts = boundary_anchored_low_discrepancy_points(&b, 6, 1);
+/// assert_eq!(pts.row(0), array![0.0, 0.0]);
+/// assert_eq!(pts.row(3), array![1.0, 1.0]);
+/// assert_eq!(pts.row(4), array![0.5, 0.5]);
+/// ```
 pub fn boundary_anchored_low_discrepancy_points(
     bounds: &Bounds<f64>,
     n: usize,

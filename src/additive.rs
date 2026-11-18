@@ -9,8 +9,7 @@
 //! independence proposal exploits: each coordinate is drawn from its own 1D
 //! tempered marginal `exp(-g_j/T)/Z_j(T)` by inverse-CDF, in `O(d m)` with no
 //! curse of dimensionality, so a single draw places every coordinate at its
-//! tempered optimum at once -- the regime an active-subspace surrogate cannot
-//! reach.
+//! tempered optimum at once, which an active-subspace surrogate cannot do.
 //!
 //! Like [`crate::reduced::ChebyshevSurrogate`], the surrogate is an
 //! `Obj`-transform: it implements [`Objective`], so every point of the sampling
@@ -136,6 +135,25 @@ pub struct AdditiveSurrogate {
 impl AdditiveSurrogate {
     /// Fit the surrogate to pilot points `x` (`n x d`) and values `y` (`n`) with
     /// a default of 12 backfitting passes.
+    ///
+    /// `degree` is the highest Chebyshev degree per coordinate.
+    ///
+    /// # Panics
+    ///
+    /// As [`AdditiveSurrogate::fit_backfit`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use eindir_core::{AdditiveSurrogate, Bounds, halton_points};
+    /// use ndarray::{Array1, array};
+    ///
+    /// let b = Bounds::new(array![-1.0, -1.0], array![1.0, 1.0], 0.0);
+    /// let x = halton_points(&b, 64, 1);
+    /// let y: Array1<f64> = x.rows().into_iter().map(|r| r[0] * r[0] + r[1]).collect();
+    /// let s = AdditiveSurrogate::fit(x.view(), y.view(), b, 4);
+    /// assert!((s.value(array![0.5, 0.25].view()) - 0.5).abs() < 1e-6);
+    /// ```
     pub fn fit(x: ArrayView2<f64>, y: ArrayView1<f64>, bounds: Bounds<f64>, degree: usize) -> Self {
         Self::fit_backfit(x, y, bounds, degree, 12)
     }
@@ -148,11 +166,16 @@ impl AdditiveSurrogate {
     /// under uniform sampling. Sweeping all coordinates `n_passes` times removes
     /// the finite-sample cross-coordinate contamination that an independent
     /// per-coordinate fit leaves behind, converging to the joint least-squares
-    /// additive model while staying `O(n_passes d (n degree + degree^3))` --
+    /// additive model while staying `O(n_passes d (n degree + degree^3))`,
     /// linear in `d`, unlike the joint solve. Each coordinate's Gram factor is
     /// cached, so a pass costs only one triangular solve per coordinate.
     ///
-    /// Panics when shapes disagree or `degree == 0`.
+    /// `n_passes = 0` runs one pass.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `degree == 0`, when `x.nrows() != y.len()`, when
+    /// `x.ncols() != bounds.dims` and when `x.nrows() <= degree`.
     pub fn fit_backfit(
         x: ArrayView2<f64>,
         y: ArrayView1<f64>,
@@ -241,6 +264,8 @@ impl AdditiveSurrogate {
     }
 
     /// Surrogate value at full point `x`.
+    ///
+    /// Coordinates outside the box are clamped to it first.
     pub fn value(&self, x: ArrayView1<f64>) -> f64 {
         let mut acc = self.intercept;
         for j in 0..self.bounds.dims {
@@ -250,6 +275,9 @@ impl AdditiveSurrogate {
     }
 
     /// Analytic gradient of the separable surrogate at `x`.
+    ///
+    /// A coordinate outside the box has gradient `0`, matching the flat
+    /// extension that [`AdditiveSurrogate::value`] uses there.
     pub fn gradient(&self, x: ArrayView1<f64>) -> Array1<f64> {
         let dim = self.bounds.dims;
         let mut g = Array1::<f64>::zeros(dim);
@@ -271,6 +299,9 @@ impl AdditiveSurrogate {
     /// `grid_m`-point grid. Each coordinate is sampled independently (the
     /// separable factorisation), with a uniform within-cell jitter for
     /// continuity. Returns an `n x d` array of points inside the box.
+    ///
+    /// `temperature` is in the units of the fitted values and is floored at
+    /// `1e-12`; `grid_m` is floored at 2.
     pub fn sample<R: Rng + ?Sized>(
         &self,
         n: usize,

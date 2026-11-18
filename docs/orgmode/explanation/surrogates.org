@@ -1,8 +1,45 @@
-#+TITLE: Surrogate Mechanics
-#+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
+#+TITLE: Surrogates
+#+OPTIONS: toc:nil todo:nil num:nil author:nil ^:nil
 
-* Surrogate Mechanics
+A surrogate is a cheap model of the objective, fitted on a pilot design.
+eindir has three: an additive model in all coordinates, a polynomial on a few directions, and a wrapper that restricts an objective to those directions.
+All three implement =Objective=, so a driver can use them wherever it takes an objective, and a sampler can use them for proposals while it still accepts or rejects with the true objective.
 
-The additive surrogate is a rank-1 functional tensor train.
-Its tempered density factorises, enabling O(d) independence sampling.
-The Metropolis correction on the true objective removes the mean-field bias while preserving the "one fitted object, multiple slots" property.
+* The additive surrogate
+
+=AdditiveSurrogate= models =f(x) ≈ c + sum_j g_j(x_j)=, with each =g_j= a Chebyshev series in one coordinate.
+This is a generalized additive model [1], and Chebyshev series are a natural basis for smooth functions on an interval [2].
+In the language of tensor trains it is a rank-1 functional tensor train over all =d= coordinates.
+
+=fit= sets =c= to the pilot mean and refits one coordinate at a time against the residual of the others (backfitting, [1]), 12 passes by default.
+Each coordinate's columns are centred on their pilot means, because under uniform sampling the even Chebyshev polynomials have nonzero mean and an uncentred fit would leak into =c=.
+A pass costs one small solve per coordinate with a cached factor, so the fit is linear in =d=.
+
+* Independence proposals
+
+The tempered density =exp(-f(x) / T)= of an additive model factorises into one density per coordinate.
+=sample= draws each coordinate by inverse CDF on a grid, which costs =O(d m)= for a grid of =m= nodes, and one draw puts every coordinate near its own tempered optimum at once.
+When =f= is separable this is an exact draw from the surrogate's tempered law; when it is not, the proposal is biased toward the additive part, and a Metropolis-Hastings accept step on the true objective removes the bias.
+The additive independence driver of anneal works this way.
+
+* Reduced objectives and active subspaces
+
+Many functions of many variables vary mostly along a few directions.
+Active subspace methods find them from the eigenvectors of the average outer product of the gradient [3].
+=ReducedObjective::new(inner, origin, basis, bounds)= evaluates =inner= at =origin + basis r=, so a driver can search the low-dimensional =r= instead of =x=.
+The point is clipped to the bounds of =inner= before evaluation, and the gradient is =basis^T ∇f= with the clipped components of =∇f= set to zero.
+eindir does not compute the basis; the caller supplies it.
+=ChebyshevSurrogate= is a total-degree Chebyshev polynomial with value and gradient, for a cheap model on the reduced box; the caller supplies its terms and coefficients.
+
+* References
+
+The implementation and its use in samplers:
+
+- R. Goswami, eindir, Zenodo. [[https://doi.org/10.5281/zenodo.10672737][doi:10.5281/zenodo.10672737]]
+- R. Goswami, R. Goswami, A. Goswami, M. Sallermann, S. Goswami and D. Goswami, "anneal_repro: reproducibility harness for Typed Component Algebras for Simulated Annealing and Markov-Chain Monte Carlo", version 0.4.0, Zenodo (2026). [[https://doi.org/10.5281/zenodo.20672621][doi:10.5281/zenodo.20672621]]
+
+The methods:
+
+1. T. Hastie and R. Tibshirani, "Generalized Additive Models", Stat. Sci. 1, 297-310 (1986). [[https://doi.org/10.1214/ss/1177013604][doi:10.1214/ss/1177013604]]
+2. L. N. Trefethen, /Approximation Theory and Approximation Practice, Extended Edition/, SIAM (2019). [[https://doi.org/10.1137/1.9781611975949][doi:10.1137/1.9781611975949]]
+3. P. G. Constantine, E. Dow and Q. Wang, "Active Subspace Methods in Theory and Practice: Applications to Kriging Surfaces", SIAM J. Sci. Comput. 36, A1500-A1524 (2014). [[https://doi.org/10.1137/130916138][doi:10.1137/130916138]]

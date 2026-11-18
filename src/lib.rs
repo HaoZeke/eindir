@@ -4,6 +4,30 @@
 //! This crate ships the typed primitives (FPair, Bounds, Objective trait,
 //! gradients, surrogates, point sets, and builtin objective implementations)
 //! consumed by `anneal-core`.
+//!
+//! - [`Objective`] and [`Bounds`] describe a function on a box in `R^D`;
+//!   [`TryObjective`] is the form whose evaluation can fail.
+//! - [`Gradient`], [`DifferentiableObjective`], [`AnalyticGradient`] and
+//!   [`FiniteDiffGradient`] add first derivatives.
+//! - [`low_discrepancy_points`] and the other functions of [`pointset`]
+//!   give Halton designs in a box.
+//! - [`GleThermostat`] and [`optimal_sampling_drift`] give a coloured-noise
+//!   generalized Langevin thermostat.
+//! - [`AdditiveSurrogate`], [`ChebyshevSurrogate`] and [`ReducedObjective`]
+//!   are surrogates and a dimension collapse that are themselves objectives.
+//!
+//! Cargo features: `capi` adds the C ABI (`ffi` and `ffi_try`), `python`
+//! the `eindir._core` extension, `py-objective` only the `PyObjective`
+//! adapter, and `autodiff` forward-mode gradients through `num-dual`.
+//!
+//! ```
+//! use eindir_core::{Objective, Rastrigin, low_discrepancy_points};
+//!
+//! let f = Rastrigin::<2>::new();
+//! let starts = low_discrepancy_points(f.bounds(), 8, 1);
+//! let values = f.eval_batch(starts.view());
+//! assert_eq!(values.len(), 8);
+//! ```
 
 /// Separable rank-1 surrogate and its tempered independence sampler.
 pub mod additive;
@@ -12,7 +36,7 @@ pub mod additive;
 pub mod autodiff;
 /// Box bounds on N-dimensional points.
 pub mod bounds;
-/// Error types shared by all fallible operations in `eindir-core`.
+/// A shape and range error type for downstream crates.
 pub mod error;
 /// Fallible objectives and gradients: `TryObjective`, `TryGradient` and adapters.
 pub mod fallible;

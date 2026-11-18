@@ -1,0 +1,46 @@
+#+TITLE: Low-discrepancy point sets
+#+OPTIONS: toc:nil todo:nil num:nil author:nil ^:nil
+
+* Why not random points
+
+Independent uniform points cluster and leave gaps by chance.
+A low-discrepancy sequence places each new point where the earlier ones left room, so every box-shaped region holds close to its share of the points.
+For smooth integrands this gives quasi-Monte Carlo errors that shrink faster with =n= than the =1/sqrt(n)= of Monte Carlo, and for optimisation and fitting it gives starts and pilot designs that cover the box evenly.
+The points are also deterministic: the same arguments give the same design in Rust and in Python, so a benchmark that changes the optimiser does not change its starts as well.
+
+* The Halton sequence
+
+=radical_inverse(k, b)= writes =k= in base =b= and mirrors the digits about the radix point: in base 2, =k = 6 = 110= becomes =0.011 = 0.375=.
+Halton point =k= in =d= dimensions takes the radical inverse of =k= in the first =d= primes, one prime per axis [1]; =halton_unit(k, d)= returns it.
+=halton_points(bounds, n, skip)= scales points =skip= to =skip + n - 1= into the box, and =low_discrepancy_points= is the same function.
+Point 0 is the corner =low=, so =skip = 1= is the usual choice.
+
+eindir grows its prime table on demand, so designs with thousands of axes cost one table extension instead of a search per axis.
+Rows are computed in parallel from 64 rows up, with the same result as the serial path.
+
+In many dimensions the Halton sequence has a known weakness: the axes built on two large primes advance almost in step for the first points, so their projection shows lines instead of an even cover.
+Skipping more of the sequence, or shifting it, reduces the effect for small =n=.
+
+* Shifted designs
+
+=shifted_low_discrepancy_points(bounds, n, skip, seed)= adds one uniform random vector, drawn from =seed=, to every unit point modulo 1 before scaling.
+This is the randomisation of Cranley and Patterson [2].
+Each shift keeps the low discrepancy of the design, different seeds give independent replicas, and the spread of an estimate over replicas measures its error.
+The shift comes from a seeded =StdRng=, so a seed gives the same points with the same build of the crate; a new version of =rand= may change them.
+
+* Anchored designs
+
+A Halton design after point 0 never contains a corner of the box, and an optimum on the boundary is then reached only by clipping.
+=boundary_anchored_low_discrepancy_points= overwrites the first rows: with room for them, the =2^d= corners followed by the centre, and otherwise =low=, =high= and the centre.
+The other rows keep their Halton values, so the design remains well spread inside the box.
+
+* References
+
+The implementation:
+
+- R. Goswami, eindir, Zenodo. [[https://doi.org/10.5281/zenodo.10672737][doi:10.5281/zenodo.10672737]]
+
+The methods:
+
+1. J. H. Halton, "On the efficiency of certain quasi-random sequences of points in evaluating multi-dimensional integrals", Numer. Math. 2, 84-90 (1960). [[https://doi.org/10.1007/BF01386213][doi:10.1007/BF01386213]]
+2. R. Cranley and T. N. L. Patterson, "Randomization of Number Theoretic Methods for Multiple Integration", SIAM J. Numer. Anal. 13, 904-914 (1976). [[https://doi.org/10.1137/0713071][doi:10.1137/0713071]]

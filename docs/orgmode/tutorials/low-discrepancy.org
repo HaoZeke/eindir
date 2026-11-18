@@ -1,37 +1,67 @@
-#+TITLE: Low-discrepancy points & sampling
+#+TITLE: Low-discrepancy points
 #+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
 
 #+begin_export rst
-====================================
-Low-discrepancy points & sampling
-====================================
-
-=eindir= provides reproducible bounded low-discrepancy (Halton-based) point
-sets used for pilots, initialisation, QMC polish, and surrogate fitting
-across the simmAnneal stack.
+======================
+Low-discrepancy points
+======================
 #+end_export
 
-* API
+This tutorial draws Halton point sets in a box: a plain design, shifted replicas of it and a design that starts at the corners.
+[[file:../explanation/low-discrepancy.org][Low-discrepancy point sets]] explains the construction.
 
-- =low_discrepancy_points(low, high, n, skip=1)=
-- =halton_unit(skip, dim)= (unit hypercube)
+* Python
 
-* Example: 2D starts for a bound-constrained problem
+=eindir.low_discrepancy_points(low, high, n, skip=1)= returns an =(n, d)= NumPy array.
+Row =r= is Halton point =skip + r= scaled to the box, so =skip=1= leaves out the corner =low= that point 0 maps to.
 
-#+begin_src python
+#+BEGIN_SRC python
 import numpy as np
-from eindir import low_discrepancy_points, Bounds
+import eindir
 
 low = np.array([-5.12, -5.12])
 high = np.array([5.12, 5.12])
-starts = low_discrepancy_points(low, high, 16, skip=42)
-print(starts.shape)  # (16, 2)
-print("First 3:", starts[:3])
-#+end_src
 
-* Why it matters
+starts = eindir.low_discrepancy_points(low, high, 16)
+print(starts.shape, starts[0])
+assert np.all((starts >= low) & (starts <= high))
 
-Low-discrepancy starts give better coverage than random for the same N, especially useful for Bayesian pilots, surrogate fitting, and QMC polish.
-The skip/seed controls reproducibility across runs and languages.
+# skip continues the sequence: rows 8.. of one call are rows 0.. of the next.
+more = eindir.low_discrepancy_points(low, high, 8, skip=9)
+assert np.allclose(more, starts[8:])
+#+END_SRC
 
-See also [[file:../howto/using-with-anneal.org][using with anneal]] (QMC starts for the mixer, polish, etc.).
+=eindir._core.shifted_low_discrepancy_points(low, high, n, skip=1, seed=0)= adds a random shift modulo 1 to every point before scaling, with the shift drawn from =seed=.
+It returns a list of rows, not an array.
+
+#+BEGIN_SRC python
+import numpy as np
+from eindir import _core
+
+low = np.array([-5.12, -5.12])
+high = np.array([5.12, 5.12])
+
+a = np.asarray(_core.shifted_low_discrepancy_points(low, high, 16, 1, 3))
+b = np.asarray(_core.shifted_low_discrepancy_points(low, high, 16, 1, 3))
+c = np.asarray(_core.shifted_low_discrepancy_points(low, high, 16, 1, 4))
+assert np.array_equal(a, b) and not np.array_equal(a, c)
+print(a.shape)
+#+END_SRC
+
+Unlike =eindir.low_discrepancy_points=, the =_core= function takes contiguous float64 arrays only.
+
+* Rust
+
+The Rust crate also has =halton_unit= for one point in the unit cube and =boundary_anchored_low_discrepancy_points=, which puts the corners and the centre of the box first when there is room for them.
+
+#+INCLUDE: "../../../examples/low_discrepancy.rs" src rust
+
+=cargo run --example low_discrepancy= runs it.
+The Python and Rust functions give the same points for the same arguments.
+
+* Choosing the arguments
+
+- Use =skip= to continue a sequence across calls, for example to add points to a pilot design without repeating any.
+- Use the shifted version when you need several independent designs of the same size, such as one per replica, or an error estimate across shifts.
+- Use the anchored version when the optimum may sit on the boundary; a plain Halton design never hits a corner after point 0.
+- In many dimensions, axes built on large primes can line up in pairs for small =n=; see the explanation page.

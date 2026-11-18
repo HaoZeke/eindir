@@ -1,15 +1,58 @@
 #+TITLE: FAQ
-#+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
+#+OPTIONS: toc:nil todo:nil num:nil author:nil ^:nil
 
-* How do I supply a gradient to GLE / HMC drivers?
-Implement =grad= on your Objective (or use =PyObjective= with a gradient callable).
-The GLE and HMC paths in anneal consume it; finite differences are used as fallback (charged as n_p+1 evals).
+* Why does an example from an older page fail with ImportError?
 
-* Can I use eindir primitives without anneal?
+Earlier versions of this manual imported =Bounds=, =Objective=, =GleThermostat= and =AdditiveSurrogate= from =eindir=, and none of them exist there.
+=Bounds= and =PyObjective= are in =eindir._core=, and the GLE thermostat, the surrogates, the gradient adapters and the test-function types are Rust-only.
+[[file:../reference/api-primitives.org][Python API]] lists what Python has.
+
+* How do I give a driver a gradient?
+
+In Rust, implement =Gradient<f64>= and add =impl DifferentiableObjective<f64> for T {}=, or use =AnalyticGradient=, =ForwardAd= or =FiniteDiffGradient=.
+In Python, pass =grad_fn= to =PyObjective=; there is no finite-difference fallback.
+[[file:gradients.org][Gradients]] has the details.
+
+* Can I use eindir without anneal?
+
 Yes.
-The low-discrepancy, GLE thermostat, surrogates, and Objective trait are standalone and useful for any bounded global optimisation or sampling code.
+The objective traits, the point sets, the GLE thermostat and the surrogates depend on nothing in anneal.
 
-* What about C/C++ consumers?
-cargo-c produces the C ABI + pkg-config.
-The generated header works from both C and C++; the hand-written C++ header adds helpers in =namespace eindir=.
-See =include/eindir-core.hpp= and the bindings page.
+* Why does Python raise TypeError for my list?
+
+=eindir._core= takes contiguous float64 NumPy arrays only, so lists, integer arrays and strided views raise =TypeError=.
+Convert with =np.ascontiguousarray(x, dtype=np.float64)=.
+=eindir.low_discrepancy_points= converts for you.
+
+* Why does =except Exception= not catch an error from =_core=?
+
+A Rust panic reaches Python as =pyo3_runtime.PanicException=, which derives from =BaseException=.
+=_core.Bounds= panics when =low > high=, =Bounds.clip= when the point has the wrong length, and a =PyObjective= when called from another thread.
+
+* Can I use eindir from C or C++?
+
+Yes, through =libeindir_core= and =eindir-core.h=, built with cargo-c.
+The header compiles as C++; =eindir-core.hpp= adds only =eindir::version()=.
+See [[file:c-objective.org][Objectives through the C ABI]] and [[file:../bindings.org][Bindings]].
+
+* What licence is eindir under?
+
+MIT; see =LICENSE= in the repository.
+
+* How do I cite eindir?
+
+Cite the software record on Zenodo.
+The concept DOI [[https://doi.org/10.5281/zenodo.10672737][10.5281/zenodo.10672737]] always resolves to the newest archived version; the record for v0.5.2 is [[https://doi.org/10.5281/zenodo.21428233][10.5281/zenodo.21428233]].
+
+#+BEGIN_SRC bibtex
+@software{goswami_eindir,
+  author    = {Goswami, Rohit},
+  title     = {{eindir}},
+  publisher = {Zenodo},
+  doi       = {10.5281/zenodo.10672737},
+  url       = {https://doi.org/10.5281/zenodo.10672737}
+}
+#+END_SRC
+
+When you use eindir through anneal, also cite the anneal reproducibility harness, [[https://doi.org/10.5281/zenodo.20672621][10.5281/zenodo.20672621]].
+Cite the methods behind the primitives as listed on the [[file:../explanation/gle.org][GLE]], [[file:../explanation/low-discrepancy.org][low-discrepancy]] and [[file:../explanation/surrogates.org][surrogate]] pages.

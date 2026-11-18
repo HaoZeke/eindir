@@ -1,8 +1,61 @@
-#+TITLE: API Primitives (Python)
-#+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
+#+TITLE: Python API
+#+OPTIONS: toc:nil todo:nil num:nil author:nil ^:nil
 
-* API Primitives (Python)
+The Python package has two layers: =eindir._core=, the compiled extension built from =eindir-core=, and =eindir=, pure Python.
+It covers much less than the Rust crate.
+=help(name)= shows the full docstring of each item.
 
-See the Python package =eindir= (re-exports from =eindir._core= plus pure-Python helpers) and the Rust docs (via sphinxcontrib_rust in this Sphinx build).
+* =eindir._core=
 
-Core symbols: =Objective=, =Bounds=, =low_discrepancy_points=, =halton_unit=, =GleThermostat=, =optimal_sampling_drift=, =AdditiveSurrogate=, =ChebyshevSurrogate=, =ReducedObjective=, and the various builtin objectives.
+| Name                                                   | What it is                                                                                     |
+|--------------------------------------------------------+------------------------------------------------------------------------------------------------|
+| =__version__=                                          | The version of =eindir-core= the extension was built from. =eindir.__version__= does not exist. |
+| =Bounds(low, high, slack=1e-6)=                         | A box. Attributes =dims= and =slack=; methods =contains(x)= and =clip(x)=.                        |
+| =FPair(pos, val)=                                      | A position and its value, with attributes =pos= and =val=.                                      |
+| =PyObjective(fn_, bounds, grad_fn=None)=                | A Python function as an objective. Attributes =dim= and =bounds=; methods =eval(x)= and =grad(x)=. |
+| =low_discrepancy_points(low, high, n, skip=1)=          | Halton points in the box, as a list of rows.                                                    |
+| =shifted_low_discrepancy_points(low, high, n, skip=1, seed=0)= | Halton points with a seeded random shift, as a list of rows.                             |
+
+Every array argument must be a contiguous 1-D float64 NumPy array; lists, integer arrays and strided views raise =TypeError=.
+
+Errors:
+
+- =Bounds= raises =pyo3_runtime.PanicException= when the lengths differ, =slack= is negative or =low[i] > high[i]=, and =clip= raises it for a point of the wrong length.
+  =PanicException= derives from =BaseException=, so =except Exception= does not catch it.
+- =contains= returns =False= for a point of the wrong length.
+- =PyObjective.eval= does not check the length of =x=, and an exception from =fn_= propagates.
+- =PyObjective.grad= raises =ValueError= without =grad_fn=.
+- A =PyObjective= used from a thread other than the one that created it raises =PanicException=.
+- The point functions raise =ValueError= when the lengths differ, the bounds are empty or =high[i] < low[i]=.
+
+* =eindir=
+
+| Name                                         | What it is                                                                                       |
+|----------------------------------------------+--------------------------------------------------------------------------------------------------|
+| =low_discrepancy_points(low, high, n, skip=1)= | Halton points in the box as an =(n, d)= NumPy array. Accepts any sequence of numbers.          |
+| =NumLimit(low, high, slack=1e-6, dims=1)=      | A box with =check(pos)=, which raises =OutOfBounds=, =mkpoint()= and =clip(point)=. Pass =dims=. |
+| =FPair(pos, val)=                             | A dataclass pairing a position with its value; not the same class as =_core.FPair=.             |
+| =ObjectiveFunction(limits, global_min=None)=   | Abstract base class; subclasses implement =singlepoint=, =multipoint= and =__repr__=. Calls count in =calls=. |
+| =OutOfBounds=                                 | The exception =NumLimit.check= raises.                                                           |
+| =styblinski_tang(array, *, axis=-1, xp=None)=  | The Styblinski-Tang function along =axis=, in any Array API namespace.                         |
+
+Array API, DLPack and TVM-FFI helpers, for code that must keep arrays on their device:
+
+| Name                                                    | What it does                                                         |
+|---------------------------------------------------------+----------------------------------------------------------------------|
+| =array_namespace(*arrays)=                               | The Array API namespace shared by the arrays.                        |
+| =array_device(array)=                                    | The device of the array.                                             |
+| =placement(array)=, =ArrayPlacement=                      | The namespace and device together.                                   |
+| =require_same_placement(reference, *arrays)=             | Raises unless every array shares the placement of =reference=.       |
+| =to_namespace_device(array, *, xp, device, dtype=None)=  | Converts with =xp.asarray= and places the result on =device=.        |
+| =to_reference(array, reference, *, dtype=None)=          | Converts to the namespace and device of =reference=.                 |
+| =dlpack_device(array)=                                   | =array.__dlpack_device__()=.                                         |
+| =tvm_ffi_tensor(array, *, tvm_ffi=None)=                 | A TVM-FFI tensor from =tvm_ffi.from_dlpack=; needs the =tvm_ffi= package. |
+| =tvm_ffi_tensor_metadata(array)=, =TvmFfiTensorMetadata= | Shape, dtype and device of a DLPack array, without converting it.    |
+
+=eindir.viz= has plotting helpers that need the =plotter= extra.
+
+* Rust only
+
+These have no Python binding: =Objective= and the other traits, the gradient adapters (=AnalyticGradient=, =FiniteDiffGradient=, =ForwardAd=), =halton_unit= and =boundary_anchored_low_discrepancy_points=, the GLE functions (=GleThermostat=, =optimal_sampling_drift=, =matrix_exp=, =ldl_sqrt=), the surrogates (=AdditiveSurrogate=, =ChebyshevSurrogate=, =ReducedObjective=), the fallible traits and adapters, and the test functions (=Rastrigin=, =Rosenbrock=, =Ackley=, =StybTang2D=).
+See the [[file:rust-api.org][Rust API reference]].

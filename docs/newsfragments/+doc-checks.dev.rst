@@ -1,0 +1,2 @@
+A ``docs`` job in CI builds rustdoc with ``-D warnings -D missing_docs``, checks the panics and errors sections with clippy, runs the Rust and Python doctests and the example programs, runs the Python blocks of the manual with ``tools/check_org_examples.py`` and checks every link and DOI with ``tools/check_links.py``.
+``pixi run -e docs docbld`` fails on Sphinx warnings, and ``scripts/llms/build_llms.py`` copies files named by ``#+INCLUDE:`` into ``llms-full.txt``.

@@ -349,6 +349,20 @@ class OrgDetailTest(unittest.TestCase):
         full = self.full("#+title: The ~add~ function\n\nIt adds.\n")
         self.assertIn("## The `add` function\n", full)
 
+    def test_include_becomes_a_fenced_copy_of_the_file(self):
+        files = {
+            **FILES,
+            "docs/orgmode/api.org": '#+title: API\n\n#+INCLUDE: "../../demo.rs" src rust\n\n#+INCLUDE: "gone.c" src c\n',
+            "demo.rs": "fn main() {}\n",
+        }
+        repo = Repo(files)
+        self.addCleanup(repo.close)
+        status, err = repo.run()
+        self.assertEqual(status, 0, err)
+        full = repo.read("llms-full.txt")
+        self.assertIn("```rust\nfn main() {}\n```", full)
+        self.assertIn("(Included file: `docs/orgmode/gone.c`.)", full)
+
     def test_plain_file_link_to_an_image(self):
         full = self.full("#+title: API\n\nfile:plot.png\n")
         self.assertIn("![plot.png](docs/orgmode/plot.png)", full)

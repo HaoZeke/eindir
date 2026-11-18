@@ -33,11 +33,11 @@ Bindings:
 - `pytest/`: the pytest suite.
 - `tests/`: Rust integration tests, `ffi_smoke.c`, `header_check.c` and `header_check.cpp`.
 - `include/`: `eindir-core.hpp`.
-- `examples/`: `batch_scale.rs`, which times `eval_batch_parallel` against the thread count.
+- `examples/`: the programs the tutorials include, and `batch_scale.rs`, which times `eval_batch_parallel` against the thread count.
 - `cbindgen.toml`, `meson.build`, `CMakeLists.txt`: header generation and glue for C and C++ consumers.
 - `docs/orgmode/`: the manual sources in Org, with the Sphinx settings in `docs/source/conf.py`.
 - `docs/newsfragments/`: towncrier fragments for the next release.
-- `tools/`: version sync and drift checks.
+- `tools/`: version sync and drift checks, and the manual's example and link checks.
 - `skills/`: task guides, each a `SKILL.md` with `scripts/` and `assets/`.
 - `scripts/`: `llms/` writes `llms.txt`, and `skills/` checks and runs the guides.
 
@@ -96,8 +96,21 @@ When valgrind is on PATH, the C ABI skill runs its examples under it as well.
 ## Docs
 
 ```bash
-pixi run -e docs docbld    # Org to RST (orgbld), then Sphinx HTML in docs/build/
+pixi run -e docs docbld    # Org to RST (orgbld), then Sphinx HTML in docs/build/, failing on warnings
 ```
+
+The `docs` job of `ci.yml` checks the rest, without Emacs or Sphinx.
+
+```bash
+RUSTDOCFLAGS="-D warnings -D missing_docs" cargo doc --all-features --no-deps
+cargo clippy --all-features --lib -- -D warnings -W clippy::missing_errors_doc -W clippy::missing_panics_doc
+for e in examples/*.rs; do cargo run --example "$(basename "$e" .rs)"; done
+python -m pytest --doctest-modules python/eindir/__init__.py python/eindir/core
+python tools/check_org_examples.py   # every Python block and #+INCLUDE in the manual
+python tools/check_links.py          # every URL and DOI; needs network access
+```
+
+Tutorials include their Rust code from `examples/` with `#+INCLUDE:`, so edit the example, not the page.
 
 `docs/source/*.rst` is generated and ignored by git, so edit the Org files.
 Emacs installs ox-rst from Milkypostman's Emacs Lisp Package Archive (MELPA) the first time, so the first build needs network access.
@@ -122,9 +135,8 @@ After changing the manual, this file or a skill, run `python3 scripts/llms/build
 
 Python, each reproduced by `skills/eindir-python/scripts/pitfalls.py`:
 
-- The Python examples on the Quickstart page and in four tutorials (quickstart, low-discrepancy, GLE thermostat, surrogates) stop with ImportError, against main and against PyPI 0.5.1 alike.
-  They import names that do not exist: `Bounds` and `Objective` from `eindir`, `GleThermostat` and `AdditiveSurrogate`.
-  `skills/eindir-python/` shows calls that work.
+- Older copies of the manual import names that Python does not have, `Bounds` and `Objective` from `eindir`, `GleThermostat` and `AdditiveSurrogate`, so their examples stop with ImportError.
+  The manual's Python blocks now run in CI through `tools/check_org_examples.py`, and `skills/eindir-python/` shows calls that work.
 - `GleThermostat`, `optimal_sampling_drift`, `matrix_exp`, `ldl_sqrt`, `halton_unit`, the surrogates, the gradient adapters and the test-function types such as `Rastrigin` are Rust-only.
   `eindir._core.Bounds` and `PyObjective` exist, but `eindir.Bounds` does not.
 - Read the version from `eindir._core.__version__`, since `eindir.__version__` does not exist.

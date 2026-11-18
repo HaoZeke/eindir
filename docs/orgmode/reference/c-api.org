@@ -1,0 +1,132 @@
+#+TITLE: C API
+#+OPTIONS: toc:nil todo:nil num:nil author:nil ^:nil
+
+The C API is declared in =eindir-core.h=, which cbindgen generates from =src/ffi.rs= and =src/ffi_try.rs= with their doc comments, and which =cargo cinstall= installs.
+The header includes =dlpack/dlpack.h= (DLPack 1.0) and compiles as C99 and as C++.
+=include/eindir-core.hpp= adds =eindir::version()= for C++.
+The library exports these symbols only when built with the =capi= feature, which cargo-c turns on.
+
+[[file:../explanation/c-abi.org][The C ABI]] explains the design.
+
+* Version and compatibility
+
+| Function                                         | Returns                                                                                   |
+|--------------------------------------------------+-------------------------------------------------------------------------------------------|
+| =const char *eindir_core_version(void)=           | The package version, such as ="0.8.0"=.                                                    |
+| =const char *eindir_core_abi_family(void)=        | ="eindir.objective"=.                                                                     |
+| =eindir_abi_stamp_t eindir_core_abi_stamp(void)=  | The library's stamp.                                                                      |
+| =int32_t eindir_core_abi_compatible(const eindir_abi_stamp_t *stamp)= | 1 when the library can serve a consumer built with =stamp=, 0 otherwise or for NULL. |
+
+=eindir_abi_stamp_t= has =abi_major=, =abi_minor=, =objective_layout=, =objective_size=, =objective_align=, =dlpack_major=, =dlpack_minor= and =features=.
+=eindir_core_abi_compatible= requires equal =abi_major=, =objective_layout=, =objective_size=, =objective_align= and =dlpack_major=, an =abi_minor= and =dlpack_minor= no greater than the library's, and no feature bits the library lacks.
+
+Feature bits: =EINDIR_ABI_FEATURE_GRADIENT= (1), =EINDIR_ABI_FEATURE_BATCH= (2), =EINDIR_ABI_FEATURE_TRY_CALLBACKS= (4).
+
+* Errors
+
+| Function                               | Returns                                                                                  |
+|----------------------------------------+------------------------------------------------------------------------------------------|
+| =const char *eindir_last_error(void)=   | The last message recorded on this thread, or the empty string. Never NULL.               |
+
+The pointer stays valid until the next message on the same thread.
+Successes do not clear the message, and a failure returned by an =eindir_objective_t= callback does not set it.
+
+=enum eindir_status_t= is =EINDIR_SUCCESS= (0), =EINDIR_INVALID_PARAMETER= (1) or =EINDIR_INTERNAL_ERROR= (2).
+
+* =eindir_objective_t=
+
+| Field         | Type                                         | Meaning                                                    |
+|---------------+----------------------------------------------+------------------------------------------------------------|
+| =dim=         | =uintptr_t=                                  | Number of coordinates.                                     |
+| =low=, =high= | =double *=                                   | =dim= bounds each.                                         |
+| =eval_fn=     | =EindirEvalFn=                               | Value callback; never NULL.                                |
+| =grad_fn=     | =EindirGradFn=                               | Gradient callback, or NULL.                                |
+| =user_data=   | =void *=                                     | Passed to every callback.                                  |
+| =free_fn=     | =EindirFreeFn=                               | Destructor for =user_data=, or NULL.                       |
+| =descriptor=  | =const eindir_objective_descriptor_t *=      | Semantic descriptor, or NULL.                              |
+
+Callbacks:
+
+#+BEGIN_SRC c
+typedef enum eindir_status_t (*EindirEvalFn)(void *user_data,
+    const struct DLManagedTensorVersioned *x, double *value_out);
+typedef enum eindir_status_t (*EindirGradFn)(void *user_data,
+    const struct DLManagedTensorVersioned *x, struct DLManagedTensorVersioned *grad_out);
+typedef void (*EindirFreeFn)(void *);
+#+END_SRC
+
+| Function                                                                          | Behaviour                                                                                                              |
+|-----------------------------------------------------------------------------------+------------------------------------------------------------------------------------------------------------------------|
+| =eindir_objective_new(dim, bounds_low, bounds_high, eval_fn, grad_fn, user_data, free_fn)= | Copies the bounds, which must be 1-D tensors of length =dim=, and returns a handle with a NULL descriptor, or NULL. |
+| =eindir_objective_free(obj)=                                                      | Calls =free_fn(user_data)= when both are non-NULL and frees the handle. NULL is a no-op. Never call it on an embedded handle. |
+| =eindir_objective_dim(obj)=                                                       | =dim=, or 0 for NULL.                                                                                                  |
+| =eindir_objective_bounds_low(obj, out)=, =eindir_objective_bounds_high(obj, out)= | Copy the bounds into a caller tensor of length =dim=.                                                                  |
+| =eindir_objective_eval(obj, x, value_out)=                                        | Calls =eval_fn= and returns its status.                                                                                |
+| =eindir_objective_grad(obj, x, grad_out)=                                         | Calls =grad_fn= and returns its status; =EINDIR_INVALID_PARAMETER= when there is none.                                  |
+| =eindir_objective_has_grad(obj)=                                                  | 1 with a gradient callback, 0 without or for NULL.                                                                     |
+| =eindir_objective_descriptor(obj)=                                                | The descriptor pointer, or NULL.                                                                                       |
+
+A NULL argument gives =EINDIR_INVALID_PARAMETER= and a message.
+A caught panic gives =EINDIR_INTERNAL_ERROR= and the panic message.
+
+* =eindir_objective_descriptor_t=
+
+| Field                                                                        | Meaning                                                    |
+|------------------------------------------------------------------------------+------------------------------------------------------------|
+| =schema_id=                                                                  | Schema identifier; must be set and equal on both sides.    |
+| =producer_id=                                                                | Producer identity.                                         |
+| =length_unit=, =energy_unit=                                                 | Units, as strings agreed under the schema.                 |
+| =energy_sign=, =gradient_sign=                                               | +1 for a minimisation energy and for =dE/dx=.              |
+| =operations=                                                                 | Bits: =EINDIR_OBJECTIVE_OPERATION_ENERGY= (1), =EINDIR_OBJECTIVE_OPERATION_FORCES= (2). |
+| =tensor_device_type=, =tensor_dtype_code=, =tensor_dtype_bits=, =tensor_dtype_lanes= | DLPack device and dtype, such as =EINDIR_TENSOR_DEVICE_CPU= (1) and =EINDIR_TENSOR_DTYPE_FLOAT= (2). |
+| =tensor_layout=                                                              | =EINDIR_TENSOR_LAYOUT_CONTIGUOUS= (1).                     |
+| =callback_lifetime=                                                          | =EINDIR_CALLBACK_LIFETIME_BORROWED_SYNC= (1).              |
+
+=int32_t eindir_objective_descriptor_compatible(const eindir_objective_descriptor_t *actual, const eindir_objective_descriptor_t *required)= returns 1 when =actual= meets =required=.
+Empty or NULL strings and zero numbers in =required= accept any value, except =schema_id=; =operations= must be a subset of =actual='s.
+It returns 0 and records a message, which does not name the field, on a mismatch or a NULL argument.
+The strings are borrowed and must outlive every use of the descriptor.
+
+* =eindir_try_objective_t=
+
+The fields are those of =eindir_objective_t= without =descriptor=, with =try_eval_fn= and =try_grad_fn= in place of the two callbacks.
+Never cast between the two handle types.
+
+#+BEGIN_SRC c
+typedef int32_t (*EindirTryEvalFn)(void *user_data,
+    const struct DLManagedTensorVersioned *x, double *value_out,
+    char *message_out, uintptr_t message_cap);
+typedef int32_t (*EindirTryGradFn)(void *user_data,
+    const struct DLManagedTensorVersioned *x, struct DLManagedTensorVersioned *grad_out,
+    char *message_out, uintptr_t message_cap);
+#+END_SRC
+
+A callback returns =EINDIR_TRY_SUCCESS= (0), =EINDIR_TRY_INVALID_PARAMETER= (1), =EINDIR_TRY_INTERNAL_ERROR= (2) or a status of its own, and writes a NUL-terminated message of at most =message_cap - 1= bytes.
+eindir always lends it a buffer of =EINDIR_TRY_MESSAGE_CAP= (256) bytes.
+
+| Function                                                                          | Behaviour                                                                                   |
+|-----------------------------------------------------------------------------------+---------------------------------------------------------------------------------------------|
+| =eindir_try_objective_new(dim, bounds_low, bounds_high, try_eval_fn, try_grad_fn, user_data, free_fn)= | As =eindir_objective_new=.                                          |
+| =eindir_try_objective_free(obj)=                                                  | As =eindir_objective_free=.                                                                 |
+| =eindir_try_objective_dim(obj)=, =eindir_try_objective_has_grad(obj)=             | As for =eindir_objective_t=.                                                                |
+| =eindir_try_objective_eval(obj, x, value_out, message_out, message_cap)=          | Returns the callback's status and copies its message to =message_out= (may be NULL) and to =eindir_last_error()=. |
+| =eindir_try_objective_grad(obj, x, grad_out, message_out, message_cap)=           | The same for the gradient; status 1 with "no gradient callback" when there is none.         |
+
+Before copying a callback's message, eindir doubles each backslash and writes each byte that is not valid UTF-8 as =\xhh=, so the copies are valid UTF-8 from which the callback's bytes can be recovered.
+=message_out= receives at most =message_cap - 1= bytes of the escaped message, cut at a character boundary, and =eindir_last_error()= receives all of it.
+On success =message_out= is set to the empty string and =eindir_last_error()= is left as it was.
+
+* Tensors
+
+Every tensor is a borrowed =struct DLManagedTensorVersioned= of DLPack 1.0.
+eindir reads and writes =dim= contiguous doubles at =dl_tensor.data=, ignores =byte_offset=, checks =ndim= and =shape[0]= only for the bounds passed to the =_new= functions, and does not check dtype, device or strides.
+Do not call a tensor's deleter or keep a pointer to it after the call.
+
+* Rust side
+
+With the =capi= feature, =eindir_core::ffi= and =eindir_core::ffi_try= hold the Rust side, and the crate root re-exports the wrappers:
+
+| Item                         | Traits                                                    | On failure                              |
+|------------------------------+-----------------------------------------------------------+-----------------------------------------|
+| =EindirObjectiveWrapper=     | =Objective=, =Gradient=, =DifferentiableObjective=         | NaN value; zeros without a gradient callback |
+| =EindirTryObjectiveWrapper=  | =TryObjective=, =TryGradient=, =TryDifferentiableObjective= | =Err(CallbackError { code, message })=  |

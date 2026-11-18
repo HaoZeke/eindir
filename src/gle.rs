@@ -7,16 +7,16 @@
 //! slowly. The GLE replaces the white noise by a colored noise generated from
 //! `ns` auxiliary momenta, whose drift matrix `A` shapes a frequency-dependent
 //! friction. A well-chosen `A` makes the sampling efficiency nearly flat across
-//! a target frequency band -- "optimal sampling" -- so conditioning is handled
-//! by the noise spectrum exactly as the `1/sqrt(D)` scale handles dimension.
+//! a target frequency band ("optimal sampling"), so the noise spectrum, not
+//! the step size, absorbs the spread of curvatures.
 //!
 //! The per-step propagator follows i-PI's `ThermoGLE`: `T = exp(-dt A)`,
 //! `S S^T = k_B (C - T C T^T)`, and `s <- T s + S xi`, with `xi` standard
 //! normal and `s[0]` the physical (mass-scaled) momentum.
 //! For canonical sampling `C = temperature * I`, which makes the auxiliary
-//! process leave the Boltzmann momentum distribution invariant for ANY valid
-//! drift `A` -- the "a la carte" decoupling of correctness (set by `C`) from
-//! acceleration (set by `A`). `matrix_exp` is a Taylor scaling-and-squaring and
+//! process leave the Boltzmann momentum distribution invariant for any valid
+//! drift `A`. This is the "a la carte" decoupling of correctness (set by
+//! `C`) from acceleration (set by `A`). `matrix_exp` is a Taylor scaling-and-squaring and
 //! the noise factor is an LDL^T square root, so no linear-algebra backend is
 //! needed.
 
@@ -29,7 +29,23 @@ use rand_distr::StandardNormal;
 /// `exp(M) = (exp(M / 2^k))^{2^k}` with the inner exponential a truncated Taylor
 /// series evaluated by Horner. Matches i-PI's `matrix_exp`; for the small GLE
 /// drift matrices (dimension `ns + 1`, a handful of rows) it is exact to machine
-/// precision with `n_taylor = 20`, `n_square = 10`.
+/// precision with `n_taylor = 20`, `n_square = 10`, the values
+/// [`GleThermostat::new`] uses. Larger norms need a larger `n_square`.
+///
+/// # Panics
+///
+/// Panics when `m` is not square.
+///
+/// # Examples
+///
+/// ```
+/// use eindir_core::matrix_exp;
+/// use ndarray::array;
+///
+/// let e = matrix_exp(&array![[1.0, 0.0], [0.0, -1.0]], 20, 10);
+/// assert!((e[[0, 0]] - 1f64.exp()).abs() < 1e-12);
+/// assert!((e[[1, 1]] - (-1f64).exp()).abs() < 1e-12);
+/// ```
 pub fn matrix_exp(m: &Array2<f64>, n_taylor: usize, n_square: usize) -> Array2<f64> {
     let n = m.nrows();
     assert_eq!(n, m.ncols(), "matrix_exp needs a square matrix");
@@ -56,6 +72,20 @@ pub fn matrix_exp(m: &Array2<f64>, n_taylor: usize, n_square: usize) -> Array2<f
 /// for a symmetric positive-semidefinite `M`, zeroing any negative pivot. This
 /// is i-PI's `stab_cholesky`; it needs no eigensolver and is numerically robust
 /// for the GLE noise covariance, which can be singular at small `dt`.
+///
+/// Only the lower triangle of `m` is read. A non-square `m` is not checked
+/// and gives an index panic or a meaningless result.
+///
+/// # Examples
+///
+/// ```
+/// use eindir_core::ldl_sqrt;
+/// use ndarray::array;
+///
+/// let m = array![[4.0, 2.0], [2.0, 2.0]];
+/// let s = ldl_sqrt(&m);
+/// assert!((s.dot(&s.t()) - &m).iter().all(|v| v.abs() < 1e-12));
+/// ```
 pub fn ldl_sqrt(m: &Array2<f64>) -> Array2<f64> {
     let n = m.nrows();
     let mut l = Array2::<f64>::zeros((n, n));
@@ -103,9 +133,16 @@ pub struct GleThermostat {
 }
 
 impl GleThermostat {
-    /// Build from an explicit drift `a` and covariance `c` at timestep `dt`
-    /// (Boltzmann constant `kb`, in reduced units `kb = 1`). `a` and `c` are
-    /// `(ns+1) x (ns+1)`.
+    /// Build from an explicit drift `a` and covariance `c` at timestep `dt`.
+    ///
+    /// `a` and `c` are `(ns+1) x (ns+1)`. `a` has units of inverse time and
+    /// `dt` of time, so only the product `dt * a` matters. `kb` is
+    /// Boltzmann's constant in the units of `c`; use `kb = 1` in reduced
+    /// units. There is no mass argument: the state is mass-scaled momentum.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `a` is not square or `c` has a different shape.
     pub fn new(a: &Array2<f64>, c: &Array2<f64>, dt: f64, kb: f64) -> Self {
         let n = a.nrows();
         assert_eq!(n, a.ncols(), "drift matrix must be square");
@@ -120,6 +157,32 @@ impl GleThermostat {
 
     /// Canonical thermostat: `C = temperature * I`, leaving the Boltzmann
     /// momentum law invariant for any valid drift `a`.
+    ///
+    /// The fourth argument is Boltzmann's constant, not a mass.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `a` is not square.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use eindir_core::{GleThermostat, OPTIMAL_SAMPLING_NS, optimal_sampling_drift};
+    /// use ndarray::Array2;
+    /// use rand::SeedableRng;
+    /// use rand::rngs::StdRng;
+    ///
+    /// let a = optimal_sampling_drift(0.2);
+    /// let gle = GleThermostat::canonical(&a, 0.01, 1.0, 1.0);
+    /// assert_eq!(gle.ns, OPTIMAL_SAMPLING_NS);
+    ///
+    /// let mut rng = StdRng::seed_from_u64(7);
+    /// let c = Array2::<f64>::eye(gle.ns + 1);
+    /// let mut s = gle.sample_stationary(&c, 3, 1.0, &mut rng);
+    /// assert_eq!(s.shape(), &[gle.ns + 1, 3]);
+    /// gle.step(&mut s.view_mut(), &mut rng);
+    /// assert!(s.iter().all(|v| v.is_finite()));
+    /// ```
     pub fn canonical(a: &Array2<f64>, dt: f64, temperature: f64, kb: f64) -> Self {
         let n = a.nrows();
         let c = Array2::<f64>::eye(n) * temperature;
@@ -128,7 +191,12 @@ impl GleThermostat {
 
     /// Advance the auxiliary state one timestep in place. `s` is `(ns+1) x dim`;
     /// row 0 holds the physical (mass-scaled) momentum of each coordinate, rows
-    /// `1..=ns` the auxiliary momenta. Applies `s <- T s + S xi`.
+    /// `1..=ns` the auxiliary momenta. Replaces `s` by `T s + S xi`, with `xi`
+    /// standard normal.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `s` does not have `ns + 1` rows.
     pub fn step<R: Rng + ?Sized>(&self, s: &mut ArrayViewMut2<f64>, rng: &mut R) {
         let dim = s.ncols();
         let n = self.ns + 1;
@@ -142,6 +210,14 @@ impl GleThermostat {
 
     /// Draw an auxiliary state from its stationary covariance `C` (mass-scaled
     /// physical momentum in row 0), used to initialise a chain at equilibrium.
+    ///
+    /// Returns an `(ns+1) x dim` array distributed as `N(0, kb * c)`. Pass the
+    /// same `c` and `kb` as at construction; for [`GleThermostat::canonical`]
+    /// that is `temperature * I`.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `c` is not `(ns+1) x (ns+1)`.
     pub fn sample_stationary<R: Rng + ?Sized>(
         &self,
         c: &Array2<f64>,
@@ -164,10 +240,9 @@ impl GleThermostat {
 /// is a complex eigenvalue pair `-Gamma +/- i Omega` skew-coupled to the
 /// physical momentum, so its friction peaks near `Omega`; the frequencies,
 /// dampings and couplings were fit to maximise the worst normalised sampling
-/// efficiency `min_omega kappa(omega)/omega` across the band -- the gle4md
-/// procedure, reproduced by `anneal/experiments/colored_noise_sampling.py`. At
-/// the fitted optimum the worst efficiency is 0.13, against 0.07 for the best
-/// single white-noise friction in the companion benchmark.
+/// efficiency `min_omega kappa(omega)/omega` across the band, following the
+/// gle4md procedure. The fit is `anneal/experiments/colored_noise_sampling.py`
+/// in the anneal repository.
 const OPTIMAL_SAMPLING_REF: [(f64, f64, f64); 6] = [
     (4.008052, 90.290099, 0.833024),
     (93.560269, 37.509324, 40.162773),
@@ -190,9 +265,28 @@ pub const OPTIMAL_SAMPLING_NS: usize = 2 * OPTIMAL_SAMPLING_REF.len();
 /// momentum; the oscillator and coupling terms are skew, so `A + A^T` is
 /// diagonal and non-negative and the fluctuation-dissipation relation
 /// `A C + C A^T = B B^T` holds for `C = I` (canonical sampling). Spreading the
-/// baths across the band flattens the friction -- hence the sampling efficiency
-/// -- the colored-noise analogue of critical damping over a whole spectrum
-/// rather than at one frequency.
+/// baths across the band flattens the friction, and with it the sampling
+/// efficiency: critical damping over a band of frequencies instead of at one.
+///
+/// # Examples
+///
+/// ```
+/// use eindir_core::{OPTIMAL_SAMPLING_NS, optimal_sampling_drift};
+///
+/// let a = optimal_sampling_drift(0.5);
+/// assert_eq!(a.dim(), (OPTIMAL_SAMPLING_NS + 1, OPTIMAL_SAMPLING_NS + 1));
+/// // A + A^T is diagonal and non-negative.
+/// let sym = &a + &a.t();
+/// for ((i, j), v) in sym.indexed_iter() {
+///     assert!(if i == j { *v >= 0.0 } else { v.abs() < 1e-12 });
+/// }
+/// ```
+///
+/// Returns an `(OPTIMAL_SAMPLING_NS + 1)` square matrix.
+///
+/// # Panics
+///
+/// Panics unless `omega0 > 0`.
 pub fn optimal_sampling_drift(omega0: f64) -> Array2<f64> {
     assert!(omega0 > 0.0, "omega0 must be positive");
     let n = OPTIMAL_SAMPLING_NS + 1;

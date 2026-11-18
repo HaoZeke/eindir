@@ -1,28 +1,41 @@
 #+TITLE: Architecture
+#+OPTIONS: toc:nil todo:nil num:nil author:nil ^:nil
 
 * Layout
 
 #+BEGIN_EXAMPLE
 eindir/
-  Cargo.toml          Rust crate (lib + cdylib + staticlib)
-  src/                Rust source
-  include/            hand-written C++ companion header
-  python/eindir/      Python package (mixed maturin layout)
-  pytest/             pytest suite
-  docs/               this documentation
+  Cargo.toml      the eindir-core crate (rlib, cdylib, staticlib) and its features
+  src/            Rust sources; ffi.rs and ffi_try.rs are the C ABI,
+                  python.rs and py_objective.rs the Python extension
+  examples/       Rust programs that the tutorials include
+  include/        eindir-core.hpp, the C++ companion header
+  python/eindir/  the pure-Python package
+  pytest/         the pytest suite
+  tests/          Rust integration tests and the C and C++ header checks
+  skills/         task guides with scripts that CI runs
+  docs/orgmode/   this manual, in Org
 #+END_EXAMPLE
 
-* Crate types
+* One crate, three artefacts
 
-The Rust crate produces three artefacts:
+=Cargo.toml= builds the crate as:
 
-- =rlib= for downstream Rust consumers
-- =cdylib= for Python (=pyo3=) and C dynamic loading
-- =staticlib= for C/C++ static linking
+- an =rlib=, for Rust crates that depend on =eindir-core=;
+- a =cdylib=, which is the Python extension when built by maturin with the =python= feature and the C shared library when built by cargo-c with =capi=;
+- a =staticlib=, for static linking from C and C++.
+
+Features keep each binding out of the others: without =capi= the library exports no =eindir_= symbols, and without =python= it does not link pyo3.
+=autodiff= adds =ForwardAd= and its dependencies.
 
 * Bindings
 
-- *Python.* =eindir._core= is the Rust extension, and the user-facing package =eindir= re-exports both Rust types and pure-Python helpers from a mixed-mode maturin layout.
-- *C.* =cargo-c= produces =eindir-core.h= and =libeindir_core.{a,so}= with =pkg-config= integration via =eindir-core.pc=.
-- *C++.*
-  The generated =eindir-core.h= is usable directly from C++, and the hand-written =include/eindir-core.hpp= adds helpers in =namespace eindir=.
+- Python: maturin builds =eindir._core= from =src/python.rs= and places it in the pure-Python package =python/eindir/=, which adds its own classes and the array helpers.
+  The two layers are separate: =eindir= does not re-export =_core= classes, except that =eindir.low_discrepancy_points= wraps the =_core= function.
+- C: cargo-c runs cbindgen over =src/ffi.rs= and =src/ffi_try.rs= to produce =eindir-core.h=, and installs it with =libeindir_core= and =eindir-core.pc=.
+- C++: the C header compiles as C++, and =include/eindir-core.hpp= includes it and adds =eindir::version()=.
+
+* Versions
+
+=version= in =Cargo.toml= is the only version written by hand.
+maturin reads it for the wheel, =tools/sync-version.sh= copies it into =meson.build=, =CMakeLists.txt=, =pixi.toml= and =towncrier.toml=, and =tools/check-version-drift.sh= checks that the copies agree.

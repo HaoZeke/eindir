@@ -16,12 +16,18 @@
 //! [`EindirTryObjectiveWrapper`], and reach C as the return value and the
 //! buffer of `eindir_try_objective_eval` and `eindir_try_objective_grad`.
 //!
-//! Callback messages are preserved losslessly as valid UTF-8 strings across
-//! [`CallbackError`], `eindir_last_error()`, and `message_out`. Valid UTF-8
-//! sequences remain verbatim except that each backslash `\` is escaped as
-//! `\\`, and each invalid UTF-8 byte is escaped visibly as `\xhh` in
-//! lowercase hexadecimal. Because literal backslashes are doubled, the
-//! original byte sequence up to the first NUL is unambiguously recoverable.
+//! Callback messages keep every byte as valid UTF-8 in [`CallbackError`],
+//! `eindir_last_error()` and `message_out`. Valid UTF-8 is copied as it is
+//! except that each backslash `\` becomes `\\`, and each byte that is not
+//! valid UTF-8 becomes `\xhh` in lowercase hexadecimal. Because literal
+//! backslashes are doubled, the bytes up to the first NUL can be recovered.
+//! Escaping makes a message longer, and `message_out` truncates it to
+//! `message_cap`.
+//!
+//! The handle has no ABI stamp and no descriptor of its own. A consumer
+//! checks the `EINDIR_ABI_FEATURE_TRY_CALLBACKS` bit of
+//! `eindir_core_abi_stamp()` before using it. Tensors follow the rules in
+//! the `ffi` module.
 
 use std::ffi::{c_char, c_void};
 
@@ -76,6 +82,10 @@ pub type EindirTryGradFn = Option<
 /// [`eindir_try_objective_free`]. A consumer that embeds it as the first
 /// member of its own struct fills the fields itself and frees its own
 /// struct, as with `eindir_objective_t`.
+///
+/// Its fields follow the order of `eindir_objective_t` without the trailing
+/// `descriptor`, but the two callbacks have different signatures, so a
+/// pointer to one handle must never be cast to the other.
 #[repr(C)]
 pub struct eindir_try_objective_t {
     /// Number of input dimensions.
@@ -93,7 +103,7 @@ pub struct eindir_try_objective_t {
     /// Opaque context forwarded verbatim to every callback invocation.
     pub user_data: *mut c_void,
     /// Optional destructor for `user_data`, called by
-    /// `eindir_try_objective_free`.
+    /// `eindir_try_objective_free` when `user_data` is not NULL.
     pub free_fn: Option<unsafe extern "C" fn(*mut c_void)>,
 }
 
@@ -298,6 +308,9 @@ fn report(result: (i32, String), message_out: *mut c_char, message_cap: usize) -
 /// after this call returns.  Returns NULL on failure, with the reason in
 /// `eindir_last_error()`; `free_fn` is not called then.
 ///
+/// The bounds tensors are checked as in `eindir_objective_new`: 1-D,
+/// `shape[0] == dim` and non-NULL `data`, with `low <= high` not checked.
+///
 /// The caller must eventually pass the returned pointer to
 /// [`eindir_try_objective_free`].
 ///
@@ -338,8 +351,9 @@ pub unsafe extern "C" fn eindir_try_objective_new(
 
 /// Free a handle created by [`eindir_try_objective_new`].
 ///
-/// Calls `free_fn(user_data)` if a destructor was registered, frees the bounds
-/// arrays, then frees the struct.  Do NOT call this on embedded handles.
+/// Calls `free_fn(user_data)` if a destructor was registered and `user_data`
+/// is not NULL, frees the bounds arrays, then frees the struct. NULL is a
+/// no-op. Do NOT call this on embedded handles.
 ///
 /// # Safety
 ///
@@ -387,7 +401,7 @@ pub unsafe extern "C" fn eindir_try_objective_dim(obj: *const eindir_try_objecti
     unsafe { (*obj).dim }
 }
 
-/// Returns non-zero if the handle has a gradient callback.
+/// Returns 1 if the handle has a gradient callback, and 0 if not or for NULL.
 ///
 /// # Safety
 ///
@@ -479,6 +493,10 @@ pub unsafe extern "C" fn eindir_try_objective_grad(
 ///
 /// Its `Error` is [`CallbackError`], so a driver generic over
 /// [`TryObjective`] returns the callback's status and message unchanged.
+/// Unlike `EindirObjectiveWrapper`, a missing gradient callback is an error
+/// (status 1, "no gradient callback"), not zeros. The bounds are copied
+/// once, at construction, with slack 0. The wrapper does not record
+/// messages for `eindir_last_error()`.
 pub struct EindirTryObjectiveWrapper<'a> {
     obj: &'a eindir_try_objective_t,
     bounds: Bounds<f64>,
@@ -488,7 +506,12 @@ impl<'a> EindirTryObjectiveWrapper<'a> {
     /// Wraps a handle.
     ///
     /// # Safety
+    ///
     /// `obj.low` and `obj.high` must point to `obj.dim` valid f64 values.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `low[i]` exceeds `high[i]` for any `i`, as [`Bounds::new`].
     pub unsafe fn new(obj: &'a eindir_try_objective_t) -> Self {
         let low = unsafe { std::slice::from_raw_parts(obj.low, obj.dim) };
         let high = unsafe { std::slice::from_raw_parts(obj.high, obj.dim) };

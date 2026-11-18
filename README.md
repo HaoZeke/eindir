@@ -73,7 +73,7 @@ fn main() {
 
 Both draw the same Halton points.
 The GLE thermostat, the surrogates and the gradient adapters have no Python binding.
-The Python examples on the Quickstart page and in four tutorials stop with ImportError.
+CI runs every Python block in the manual and every Rust program it includes.
 The [Python skill](https://github.com/HaoZeke/eindir/blob/main/skills/eindir-python/SKILL.md) lists what `eindir` exports.
 
 ## Documentation
@@ -111,18 +111,18 @@ MIT
 eindir supplies the Objective trait, Bounds, low-discrepancy generators (Halton, etc.), GLE thermostat matrices, surrogate primitives (AdditiveSurrogate, Chebyshev, ReducedObjective), and an optional `autodiff` feature (`num-dual` forward mode).
 These primitives let anneal and downstream codes stay inside the typed five-component algebra and share one implementation of each slot.
 
-**User entry for optimization:** start with [anneal](https://github.com/HaoZeke/anneal) (`pip install anneal`), the budget-only `global_optimize` API, the notebook `examples/notebooks/01_quickstart.ipynb`, and https://anneal.rgoswami.me — not the eindir trait surface.
+**User entry for optimization:** start with [anneal](https://github.com/HaoZeke/anneal) (`pip install anneal`), the budget-only `global_optimize` API, the notebook `examples/notebooks/01_quickstart.ipynb`, and https://anneal.rgoswami.me, not with the eindir traits.
 
 Project history: continuous development since **2023-02**.
-Paper reproducibility: [anneal_repro](https://github.com/HaoZeke/anneal_repro), Zenodo [10.5281/zenodo.20672621](https://doi.org/10.5281/zenodo.20672621).
+Paper reproducibility: the anneal_repro harness, Zenodo [10.5281/zenodo.20672621](https://doi.org/10.5281/zenodo.20672621). To cite eindir, use [10.5281/zenodo.10672737](https://doi.org/10.5281/zenodo.10672737).
 
 ## Native compatibility contract
 
 The C ABI exposes two complementary contracts for consumers such as rgpot and xtsci-optimize:
 
 1. `eindir_core_abi_stamp()` reports the native handle layout.
-   Consumers must require the same `abi_major`, `objective_layout`, `objective_size`, and `objective_align`.
-   `abi_minor` and the DLPack minor version may be less than or equal to the consumer's supported value.
+   Consumers must require the same `abi_major`, `objective_layout`, `objective_size`, `objective_align` and DLPack major version.
+   The consumer's `abi_minor` and DLPack minor version must not exceed the library's.
    Required feature bits must be a subset of the advertised `features`.
 2. `eindir_objective_descriptor()` reports the semantic objective contract.
    `eindir_objective_descriptor_compatible(actual, required)` checks schema, producer, units, energy and gradient signs, operations, DLPack device and dtype, tensor layout, and callback lifetime.

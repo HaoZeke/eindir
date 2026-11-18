@@ -218,6 +218,26 @@ where
 /// length [`TryGradient::grad_dims`]. Each error goes to the `sink` first,
 /// so it is not lost: log it, count it, or keep the first one.
 /// This is the sentinel convention of the C wrapper, with the error kept.
+///
+/// # Examples
+///
+/// ```
+/// use std::sync::Mutex;
+/// use eindir_core::{Bounds, NanOnError, Objective, TryOracle};
+/// use ndarray::{Array1, ArrayView1, array};
+///
+/// let oracle = TryOracle::new(
+///     Bounds::new(array![-1.0], array![1.0], 0.0),
+///     |x: ArrayView1<f64>| -> Result<(f64, Array1<f64>), &'static str> {
+///         if x[0] < 0.0 { Err("negative") } else { Ok((x[0], array![1.0])) }
+///     },
+/// );
+/// let seen = Mutex::new(Vec::new());
+/// let f = NanOnError::new(oracle, |e| seen.lock().unwrap().push(e));
+/// assert_eq!(f.eval(array![0.5].view()), 0.5);
+/// assert!(f.eval(array![-0.5].view()).is_nan());
+/// assert_eq!(*seen.lock().unwrap(), vec!["negative"]);
+/// ```
 pub struct NanOnError<O, F> {
     inner: O,
     sink: F,
@@ -313,8 +333,10 @@ where
 /// A [`TryObjective`] and [`TryGradient`] back to [`Objective`] and
 /// [`Gradient`], panicking on a failure.
 ///
-/// For tests and scripts, where a failure is a bug. The panic message is the
-/// `Debug` form of the error.
+/// For tests and scripts, where a failure is a bug. The panic message names
+/// the call, as `objective evaluation failed`, `gradient evaluation failed`
+/// or `value and gradient evaluation failed`, and ends with the `Debug` form
+/// of the error.
 pub struct PanicOnError<O> {
     inner: O,
 }
@@ -400,6 +422,25 @@ where
 /// produces both, so [`TryDifferentiableObjective::try_value_and_gradient`]
 /// costs one engine call, and `try_eval` and `try_grad` each cost one and
 /// drop the half they do not need.
+///
+/// # Examples
+///
+/// ```
+/// use eindir_core::{Bounds, TryDifferentiableObjective, TryObjective, TryOracle};
+/// use ndarray::{Array1, ArrayView1, array};
+///
+/// let oracle = TryOracle::new(
+///     Bounds::new(array![-1.0], array![1.0], 0.0),
+///     |x: ArrayView1<f64>| -> Result<(f64, Array1<f64>), String> {
+///         if x[0] > 0.5 {
+///             return Err(format!("refused x = {}", x[0]));
+///         }
+///         Ok((x[0] * x[0], array![2.0 * x[0]]))
+///     },
+/// );
+/// assert_eq!(oracle.try_value_and_gradient(array![0.25].view()), Ok((0.0625, array![0.5])));
+/// assert_eq!(oracle.try_eval(array![0.75].view()), Err("refused x = 0.75".to_string()));
+/// ```
 pub struct TryOracle<F, E> {
     f: F,
     bounds: Bounds<f64>,

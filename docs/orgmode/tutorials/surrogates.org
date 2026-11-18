@@ -1,31 +1,38 @@
-#+TITLE: Surrogates (additive, Chebyshev, reduced)
+#+TITLE: Surrogates
 #+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
 
-* Surrogates (additive, Chebyshev, reduced)
+#+begin_export rst
+==========
+Surrogates
+==========
+#+end_export
 
-Surrogates give cheap values (and sometimes gradients) for pilots, dimension collapse, and independence proposals while the true objective is only evaluated for acceptance or the reported best.
+This tutorial fits an additive surrogate on a Halton pilot, draws proposals from it, and searches a function along one direction with a reduced objective.
+The surrogates are Rust-only.
+[[file:../explanation/surrogates.org][Surrogates]] explains the models.
 
-* Additive (rank-1) surrogate
+* The program
 
-Fits a separable model c + sum_j g_j(x_j) via backfitting on a pilot design.
-For separable objectives the tempered density factorises; one global draw places every coordinate at its own tempered optimum (O(d) cost, no curse of dimensionality).
-Metropolis correction on the true f removes bias.
+#+INCLUDE: "../../../examples/surrogates.rs" src rust
 
-See =anneal.additive_independence= (uses eindir surrogates under the hood) and the rank-1 independence driver in the IISE manuscript.
+=cargo run --example surrogates= prints:
 
-* Total-degree Chebyshev + active subspace
+#+BEGIN_EXAMPLE
+worst error 5.24e-3 on 64 new points
+reduced Rastrigin at r = 1: 2
+#+END_EXAMPLE
 
-ReducedObjective (active subspace from pilot gradient covariance) + total-degree Chebyshev on the reduced box.
-Supplies both cheap value and analytic gradient.
+* What each call does
 
-Used for dimension collapse in high-D CUTEst runs and as a cheap Obj for HMC etc.
+- =AdditiveSurrogate::fit(x, y, bounds, degree)= fits =c + sum_j g_j(x_j)=, with each =g_j= a Chebyshev series up to degree =degree= in coordinate =j=.
+  The rows of =x= are the pilot points and =y= their values; it needs more rows than =degree=.
+  It runs 12 backfitting passes, refitting one coordinate at a time against the residual of the others; =fit_backfit= takes the number of passes.
+- =value= and =gradient= evaluate the fit; the surrogate also implements =Objective= and =Gradient=, so any driver can use it in place of the true function.
+- =sample(n, temperature, grid_m, &mut rng)= draws =n= points from =exp(-(f - f_min) / T)= of the fit, one coordinate at a time by inverse CDF on a grid of =grid_m= nodes.
+  =temperature= is in the units of the fitted values.
+  These are proposals: a sampler should accept or reject them with the true objective.
+- =ReducedObjective::new(inner, origin, basis, bounds)= evaluates =inner= at =origin + basis r=, where =r= lives in the box =bounds= of dimension =basis.ncols()=.
+  Here the basis is the diagonal, so =r = 1= is the point =(1, 1)=.
+- =ChebyshevSurrogate::new(bounds, terms, coeffs)= is a total-degree Chebyshev polynomial with given coefficients, for use on the reduced box; eindir does not fit it.
 
-* API surface (Python)
-
-#+begin_src python
-from eindir import AdditiveSurrogate, ChebyshevSurrogate, ReducedObjective
-# ... fit on pilot data, then use .eval(x) or pass to anneal drivers
-#+end_src
-
-The same fitted surrogate object can be read at the Obj slot (for cheap evals) or the Move slot (as an independence proposal, corrected by Metropolis on the true objective).
-This is the concrete unification payoff.
+Write =Objective::dim(&reduced)= when the type also implements =Gradient=, since =reduced.dim()= is then ambiguous.

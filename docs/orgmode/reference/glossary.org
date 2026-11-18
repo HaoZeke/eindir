@@ -1,11 +1,21 @@
 #+TITLE: Glossary
-#+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
+#+OPTIONS: toc:nil todo:nil num:nil author:nil ^:nil
 
-* Glossary
-
-- =Objective= :: Trait (and Python/C/C++ surface) for f: R^D -> R with bounds.
-- =low_discrepancy_points= :: Bounded Halton-style QMC design.
-- =GLE= :: Generalised Langevin equation coloured-noise thermostat (Ceriotti-Bussi-Parrinello).
-- =AdditiveSurrogate= :: Rank-1 separable Chebyshev surrogate (c + sum g_j(x_j)).
-- =ReducedObjective= :: Active-subspace + surrogate wrapper for dimension collapse.
-- =optimal_sampling_drift= :: Drift matrix that flattens GLE efficiency across a frequency band.
+- ABI stamp :: The =eindir_abi_stamp_t= that describes the binary layout of the C handle; see [[file:../explanation/c-abi.org][The C ABI]].
+- Active subspace :: The few directions along which a function of many variables varies most, found from the gradients.
+- =AdditiveSurrogate= :: A model =c + sum_j g_j(x_j)= with each =g_j= a Chebyshev series in one coordinate.
+- Backfitting :: Fitting an additive model by refitting one coordinate at a time against the residual of the others.
+- =Bounds= :: A box =[low, high]= in R^D with a membership slack.
+- Cranley-Patterson shift :: Adding one random vector modulo 1 to every point of a design.
+- Descriptor :: The =eindir_objective_descriptor_t= that carries the units, signs and tensor contract of a C objective.
+- DLPack :: The tensor exchange format the C ABI uses for points and gradients.
+- Drift matrix :: The matrix =A= of a GLE thermostat; it sets how fast each frequency decorrelates.
+- GLE :: Generalized Langevin equation; here, a thermostat with coloured noise from auxiliary momenta.
+- Halton sequence :: A low-discrepancy sequence that takes the radical inverse of the index in one prime per axis.
+- Low-discrepancy :: Spread so that every box holds close to its share of the points.
+- =Objective= :: The trait for a function from a box in R^D to a number.
+- =optimal_sampling_drift= :: A fitted drift matrix that samples the band =[omega0, 100 omega0]= evenly.
+- Radical inverse :: The digits of an integer in base =b= mirrored about the radix point.
+- =ReducedObjective= :: An objective evaluated at =origin + basis r=, for search in a few directions.
+- Slack :: The distance outside the box that =Bounds::contains= still accepts.
+- =TryObjective= :: The fallible counterpart of =Objective=, with an error type of the implementor's choice.

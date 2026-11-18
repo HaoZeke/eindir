@@ -11,12 +11,10 @@ branch = "main"
 full_note = "The pages follow in the order of the site's navigation, converted from Org to Markdown. The Rust API reference that Sphinx generates from the doc comments in `src/` is not included, so read the sources or run `cargo doc --open`."
 links = "raw"
 name = "eindir"
-# Drop the first two sentences of the second note once the Python
-# examples in the manual run.
 notes = [
   "Each link points at the Org source of a page under `docs/orgmode/` on GitHub. The site, https://eindir.rgoswami.me/, is built from the same sources by Sphinx, and `llms-full.txt` has every page as Markdown in one file.",
-  "Five pages of the site have Python examples that stop with ImportError. They are the Quickstart page and the Python quickstart, low-discrepancy, GLE and surrogate tutorials. The Python package is narrower than the Rust crate. `eindir` exports `NumLimit`, `FPair`, `ObjectiveFunction`, `OutOfBounds`, `low_discrepancy_points`, `styblinski_tang` and array API, DLPack and TVM-FFI helpers, and `eindir._core` adds `Bounds`, `PyObjective` and `shifted_low_discrepancy_points`. `GleThermostat`, `optimal_sampling_drift`, `matrix_exp`, `ldl_sqrt`, `halton_unit`, the surrogates, the gradient adapters and the builtin objective types are Rust-only. The `eindir-python` skill shows the calls that work.",
-  "That skill and the three others under `skills/` give worked examples of common tasks, with scripts that CI runs. `AGENTS.md` has the build, test and documentation commands and the mistakes that are easy to make. Both are reproduced at the end of `llms-full.txt`.",
+  "The Python package is narrower than the Rust crate. `eindir` exports `NumLimit`, `FPair`, `ObjectiveFunction`, `OutOfBounds`, `low_discrepancy_points`, `styblinski_tang` and array API, DLPack and TVM-FFI helpers, and `eindir._core` adds `Bounds`, `PyObjective` and `shifted_low_discrepancy_points`. `GleThermostat`, `optimal_sampling_drift`, `matrix_exp`, `ldl_sqrt`, `halton_unit`, the surrogates, the gradient adapters and the builtin objective types are Rust-only. CI runs the Python blocks of the manual, and the Rust code in the tutorials is included from `examples/`.",
+  "The `eindir-python` skill and the three others under `skills/` give worked examples of common tasks, with scripts that CI runs. `AGENTS.md` has the build, test and documentation commands and the mistakes that are easy to make. Both are reproduced at the end of `llms-full.txt`.",
 ]
 repo = "https://github.com/HaoZeke/eindir"
 summary = """
@@ -38,7 +36,7 @@ optional = ["changelog", "code_of_conduct"]
 org_exclude = ["changelog"]
 root = "docs/orgmode"
 section_order = [
-  "Getting started",
+  "Tutorials",
   "How-to Guides",
   "Explanation",
   "Reference",
@@ -50,37 +48,38 @@ section_order = [
 changelog = "CHANGELOG.md"
 
 [titles]
-faq = "Project FAQ"
-"howto/faq" = "Usage FAQ"
 index = "Overview"
 
 [descriptions]
-architecture = "Describes the repository layout, the three crate types (rlib, cdylib, staticlib) and how the Python, C and C++ bindings are produced."
-bindings = "Describes how the Python wheel, the C library with its header and pkg-config file, and the C++ helper header are built, with Meson and CMake snippets for consumers."
+architecture = "The repository layout, the three crate types (rlib, cdylib, staticlib), how the Python, C and C++ bindings are produced, and where the version lives."
+bindings = "How the Python wheel, the C library with its header and pkg-config file, and the C++ header are built, with Meson and CMake snippets for consumers."
 changelog = "Release notes, newest first."
 code_of_conduct = "The Contributor Covenant 2.1, as adopted by the project."
-contributing = "Setup, commit types, towncrier fragments, the single version source in Cargo.toml and how to bump it, style and tests."
-"dev/best_practices" = "Use one Objective for every driver, prefer low-discrepancy starts, reuse a fitted GLE drift, use surrogates as objectives or proposals, and keep arrays in one array namespace."
-"explanation/fallible-objectives" = "The TryObjective, TryGradient and TryDifferentiableObjective traits with a caller-chosen error type, their blanket impls for infallible objectives, the adapters, the C status-and-message callbacks, and how rgmin should return the error unchanged."
-"explanation/gle" = "What the GLE thermostat stores and computes, why the covariance fixes correctness while the drift sets the speed, and how anneal drives it."
-"explanation/primitives" = "The design of the Objective, low-discrepancy, GLE and surrogate primitives and how they feed one another."
-"explanation/surrogates" = "The additive surrogate as a rank-1 functional tensor train, its O(d) independence sampling and the Metropolis correction on the true objective."
-faq = "The licence (MIT) and how to cite eindir."
-"howto/faq" = "Gradients for the GLE and Hamiltonian Monte Carlo (HMC) drivers, using eindir without anneal, and C and C++ consumers."
-"howto/gradients" = "How to give an objective a gradient, and the finite-difference fallback when it has none."
-"howto/install" = "Install the wheel from PyPI, the pixi environments, or build from source with cargo, cargo-c and maturin."
-"howto/using-with-anneal" = "Where each primitive plugs into the Obj, Cool, Neigh, Move and Accept components of anneal."
-index = "What eindir provides, its bindings, the pages to read first, and how it relates to anneal."
-quickstart = "Install commands, then Python examples for an objective with low-discrepancy starts and for a standalone GLE thermostat."
-"reference/api-primitives" = "A list of core symbol names. Of these only `low_discrepancy_points` (in `eindir`) and `Bounds` (in `eindir._core`) exist in Python, and the rest are Rust items."
-"reference/glossary" = "One-line definitions of Objective, low_discrepancy_points, GLE, AdditiveSurrogate, ReducedObjective and optimal_sampling_drift."
+contributing = "Setup, commit types, towncrier fragments, the single version source in Cargo.toml, style, tests and the documentation checks."
+"dev/best_practices" = "Define the objective once, use low-discrepancy starts, reuse the GLE drift, accept surrogate proposals with the true objective, and keep arrays on their device."
+"explanation/c-abi" = "The two C handles, the ABI stamp and its compatibility rule, the semantic descriptor and its wildcards, the DLPack tensor rules, error reporting and the Rust wrappers."
+"explanation/fallible-objectives" = "The TryObjective, TryGradient and TryDifferentiableObjective traits with a caller-chosen error type, their blanket impls for infallible objectives, the adapters, the C status-and-message callbacks, and how a driver should carry the error."
+"explanation/gle" = "What the GLE thermostat computes, why the covariance fixes correctness while the drift sets the speed, the fitted optimal-sampling drift, with references."
+"explanation/low-discrepancy" = "Why Halton points, how the radical inverse builds them, Cranley-Patterson shifts and corner-anchored designs, with references."
+"explanation/primitives" = "The objective and bounds traits and how the point sets, gradients, GLE thermostat, surrogates and bindings relate to them."
+"explanation/surrogates" = "The additive Chebyshev surrogate and its backfitting, independence proposals corrected by the true objective, and reduced objectives on an active subspace, with references."
+"howto/c-objective" = "Install the C library, check the ABI stamp, write value and gradient callbacks, create or embed a handle, report failures with a message, and wrap the handle in Rust, with a complete C program."
+"howto/fallible" = "Write an objective that returns errors, pass them through a generic driver unchanged, and turn them into NaN for infallible code, with a complete Rust program."
+"howto/faq" = "ImportError from old examples, gradients, use without anneal, TypeError and PanicException from Python, C and C++ use, the licence (MIT) and how to cite eindir."
+"howto/gradients" = "Give an objective a gradient in Rust (by hand, closure, forward-mode AD or central differences), in Python with grad_fn, and in C."
+"howto/install" = "Install from PyPI or crates.io, build the Python package or the C library from source, and use the pixi environments."
+"howto/using-with-anneal" = "Which eindir items the anneal drivers use for the objective, start points, GLE moves and surrogate proposals."
+index = "What eindir provides, its bindings, the pages to read first, and how to cite it."
+quickstart = "Evaluate a function at eight Halton points in a box, from Python and from Rust, with the output of each."
+"reference/api-primitives" = "Every name in eindir and eindir._core with its signature, the argument types and exceptions, and the list of Rust-only items."
+"reference/c-api" = "Every function, type and constant of eindir-core.h: version and compatibility, errors, both handles, the descriptor, tensor rules and the Rust wrappers."
+"reference/glossary" = "Short definitions of the terms the manual uses, from ABI stamp to TryObjective."
 "reference/rust-api" = "The entry page of the Rust API reference that Sphinx generates from the doc comments of the crate."
-spec = "One sentence on the primitives the crate exposes."
-tutorials = "Install from pip, pixi or source, print the extension version, and build a NumLimit box from Python."
-"tutorials/gle-thermostat" = "Why coloured noise helps on ill-conditioned objectives, and the drift, thermostat and stationary-sampling calls."
-"tutorials/low-discrepancy" = "Bounded Halton point sets from low_discrepancy_points(low, high, n, skip), with a 2-D example."
-"tutorials/quickstart" = "Define a Python objective, draw low-discrepancy starts inside its bounds and evaluate them."
-"tutorials/surrogates" = "The additive (rank-1 Chebyshev), total-degree Chebyshev and reduced (active subspace) surrogates and their construction."
+tutorials = "The tutorials, what each covers, and how to print the installed version."
+"tutorials/gle-thermostat" = "Build the GLE thermostat with the optimal-sampling drift, start it at equilibrium and check the momentum variance, in Rust."
+"tutorials/low-discrepancy" = "Halton points from Python and Rust: plain designs, skip, seeded shifted replicas and corner-anchored designs."
+"tutorials/quickstart" = "Wrap a Python function and its gradient as an objective, draw start points, and use the pure-Python NumLimit and ObjectiveFunction."
+"tutorials/surrogates" = "Fit an additive surrogate on a Halton pilot, draw proposals from it, and search along one direction with a reduced objective, in Rust."
 
 [[links]]
 description = "Build, test and documentation commands, common tasks and pitfalls for working in this repository."
