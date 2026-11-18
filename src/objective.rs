@@ -1,4 +1,5 @@
-//! The `Objective` trait: a typed function `Obj : S -> R` from the IISE manuscript.
+//! The `Objective` trait: a typed function `Obj : S -> R`, the objective slot
+//! of the anneal component algebra.
 
 use crate::{Bounds, FPair};
 use ndarray::{Array1, ArrayView1, ArrayView2};
@@ -10,15 +11,40 @@ pub const EVAL_BATCH_PARALLEL_MIN: usize = 16;
 
 /// A real-valued function on `R^dim` with a known feasible domain.
 ///
-/// The IISE manuscript's `Obj` signature: a typed map from a state space
-/// `S = R^dim` (with `Bounds`) to `R`. Implementors may override
-/// `eval_batch` and `global_min` for performance or known-optima
-/// instrumentation.
+/// The `Obj` signature of the anneal component algebra: a typed map from a
+/// state space `S = R^dim` (with `Bounds`) to `R`. Implementors may
+/// override `eval_batch` for multi-walker or multi-start backends (Rayon,
+/// one Python call per batch, worker pools) and `global_min` for
+/// known-optima instrumentation.
 ///
-/// A real-valued function on `R^dim` with a known feasible domain.
+/// `eval` cannot fail. A surface that can fail implements
+/// [`crate::TryObjective`] instead, and every `Objective` is already a
+/// `TryObjective` with `Error = Infallible`.
 ///
-/// Implementors may override `eval_batch` for multi-walker / multi-start
-/// backends (Rayon-native, Python single-attach batch, CUTEst worker pools).
+/// # Examples
+///
+/// ```
+/// use eindir_core::{Bounds, Objective};
+/// use ndarray::{ArrayView1, array};
+///
+/// struct Sphere(Bounds<f64>);
+///
+/// impl Objective<f64> for Sphere {
+///     fn dim(&self) -> usize {
+///         self.0.dims
+///     }
+///     fn bounds(&self) -> &Bounds<f64> {
+///         &self.0
+///     }
+///     fn eval(&self, x: ArrayView1<f64>) -> f64 {
+///         x.iter().map(|v| v * v).sum()
+///     }
+/// }
+///
+/// let s = Sphere(Bounds::new(array![-1.0, -1.0], array![1.0, 1.0], 0.0));
+/// assert_eq!(s.eval(array![0.5, 0.5].view()), 0.5);
+/// assert_eq!(s.eval_batch(array![[1.0, 0.0], [0.0, 0.0]].view()), array![1.0, 0.0]);
+/// ```
 pub trait Objective<T: Float>: Send + Sync {
     /// Number of input dimensions; matches `bounds().dims`.
     fn dim(&self) -> usize;
@@ -27,6 +53,9 @@ pub trait Objective<T: Float>: Send + Sync {
     fn bounds(&self) -> &Bounds<T>;
 
     /// Evaluates the objective at a single point.
+    ///
+    /// Callers pass `dim` coordinates. Nothing checks that `x` is inside
+    /// `bounds()`; implementors decide what a point outside means.
     fn eval(&self, x: ArrayView1<T>) -> T;
 
     /// Evaluates a batch of points (rows of `x`).
@@ -46,7 +75,10 @@ pub trait Objective<T: Float>: Send + Sync {
 
 /// Parallel multi-walker / multi-start batch evaluation for `Objective<f64>`.
 ///
-/// Uses Rayon when `x.nrows() >= EVAL_BATCH_PARALLEL_MIN`. Prefer
+/// Uses Rayon when `x.nrows() >= EVAL_BATCH_PARALLEL_MIN` and calls
+/// [`Objective::eval_batch`] below that. The result is in row order and
+/// does not depend on the thread count; `RAYON_NUM_THREADS` sets the pool
+/// size. Prefer
 /// [`Objective::eval_batch`] when the implementor has a specialized batch
 /// path (Python/CUTEst); this helper is the native Sync hot path.
 pub fn eval_batch_parallel<O>(obj: &O, x: ArrayView2<f64>) -> Array1<f64>

@@ -17,6 +17,25 @@
 //! - place `eindir_objective_t` as the first member of the consumer struct;
 //! - cast the consumer pointer to `eindir_objective_t*` for evaluation;
 //! - call the consumer's own destructor rather than `eindir_objective_free`.
+//!
+//! Compatibility has two parts. [`eindir_core_abi_stamp`](crate::ffi::eindir_core_abi_stamp) describes the
+//! binary layout and [`eindir_core_abi_compatible`](crate::ffi::eindir_core_abi_compatible) checks a stamp against
+//! it; [`eindir_objective_descriptor_compatible`](crate::ffi::eindir_objective_descriptor_compatible) checks the meaning of an
+//! objective (units, signs, tensor contract) through the optional
+//! descriptor an embedding producer attaches.
+//!
+//! Tensors are DLPack 1.0 `DLManagedTensorVersioned`. eindir reads and
+//! writes the `data` pointer of the tensors it is given as contiguous
+//! `double` values, starting at `data` (it ignores `byte_offset`), and it
+//! checks `ndim` and `shape[0]` only where a function says so. dtype,
+//! device and strides are not checked. Tensors that eindir builds itself
+//! (in [`EindirObjectiveWrapper`]) are 1-D CPU `float64` with `strides`
+//! `[1]`, `byte_offset` 0, flags 0, and are borrowed for the duration of
+//! one callback.
+//!
+//! On failure a function records a message for [`eindir_last_error`](crate::ffi::eindir_last_error) when
+//! the failure is its own (a NULL argument, a bad shape, a panic). A status
+//! returned by a callback is passed through unchanged.
 
 use std::cell::RefCell;
 use std::ffi::{CStr, CString};
@@ -38,7 +57,11 @@ pub extern "C" fn eindir_core_version() -> *const c_char {
 // Status codes
 // ---------------------------------------------------------------------------
 
-/// Status codes returned by all eindir C API functions.
+/// Status codes returned by the `eindir_objective_*` functions and their
+/// callbacks.
+///
+/// The fallible handle in `ffi_try` returns a plain `int32_t` instead, with
+/// `0`, `1` and `2` meaning the same as these three.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum eindir_status_t {
@@ -74,6 +97,10 @@ pub const EINDIR_TENSOR_LAYOUT_CONTIGUOUS: u32 = 1;
 pub const EINDIR_CALLBACK_LIFETIME_BORROWED_SYNC: u32 = 1;
 
 /// Machine-readable semantic metadata for an objective handle.
+///
+/// eindir defines no schema of its own: producers and consumers agree on
+/// `schema_id` and on what each field means under it. All string fields are
+/// borrowed and must outlive every use of the descriptor.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct eindir_objective_descriptor_t {
@@ -106,6 +133,9 @@ pub struct eindir_objective_descriptor_t {
 }
 
 /// ABI metadata exchanged by native eindir-compatible consumers.
+///
+/// Returned by [`eindir_core_abi_stamp`] and checked by
+/// [`eindir_core_abi_compatible`].
 #[repr(C)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct eindir_abi_stamp_t {
@@ -136,15 +166,21 @@ thread_local! {
 }
 
 /// Replace the current thread's diagnostic returned by [`eindir_last_error`].
+///
+/// A message with an interior NUL byte is replaced by a fixed notice.
 pub fn set_last_error(msg: &str) {
     LAST_ERROR.with(|cell| {
         let c = CString::new(msg)
-            .unwrap_or_else(|_| CString::new("(error message contained interior NUL)").unwrap());
+            .unwrap_or_else(|_| CString::from(c"(error message contained interior NUL)"));
         *cell.borrow_mut() = c;
     });
 }
 
 /// Retrieve the last error message for the current thread.
+///
+/// Never NULL; the empty string when nothing has been recorded on this
+/// thread. The pointer stays valid until the next message is recorded on
+/// the same thread. The library never clears the message on success.
 #[unsafe(no_mangle)]
 pub extern "C" fn eindir_last_error() -> *const c_char {
     LAST_ERROR.with(|cell| cell.borrow().as_ptr())
@@ -175,6 +211,11 @@ where
 // ---------------------------------------------------------------------------
 
 /// Callback for evaluating the objective value.
+///
+/// Receives the handle's `user_data`, the point `x` and a pointer to one
+/// `double` to write. Returns `EINDIR_SUCCESS` or another status, which the
+/// caller receives unchanged. `x` is borrowed for the call: do not call its
+/// deleter or keep it.
 pub type EindirEvalFn = unsafe extern "C" fn(
     user_data: *mut c_void,
     x: *const DLManagedTensorVersioned,
@@ -182,6 +223,9 @@ pub type EindirEvalFn = unsafe extern "C" fn(
 ) -> eindir_status_t;
 
 /// Callback for evaluating the gradient (NULL = no analytic gradient).
+///
+/// Writes `dim` doubles to `grad_out->dl_tensor.data`. Both tensors are
+/// borrowed for the call.
 pub type EindirGradFn = Option<
     unsafe extern "C" fn(
         user_data: *mut c_void,
@@ -190,7 +234,8 @@ pub type EindirGradFn = Option<
     ) -> eindir_status_t,
 >;
 
-/// Destructor for `user_data`.
+/// Destructor for `user_data`, called at most once by
+/// [`eindir_objective_free`] and only when `user_data` is not NULL.
 pub type EindirFreeFn = Option<unsafe extern "C" fn(*mut c_void)>;
 
 // ---------------------------------------------------------------------------
@@ -214,11 +259,11 @@ pub type EindirFreeFn = Option<unsafe extern "C" fn(*mut c_void)>;
 pub struct eindir_objective_t {
     /// Number of input dimensions.
     pub dim: usize,
-    /// Lower bounds: heap-allocated `f64[dim]`, owned by this struct when
-    /// created via eindir_objective_new.
+    /// Lower bounds: `dim` doubles, owned by this struct when created via
+    /// `eindir_objective_new`.
     pub low: *mut f64,
-    /// Upper bounds: heap-allocated `f64[dim]`, owned by this struct when
-    /// created via eindir_objective_new.
+    /// Upper bounds: `dim` doubles, owned by this struct when created via
+    /// `eindir_objective_new`.
     pub high: *mut f64,
     /// Value callback.  Must not be NULL.
     pub eval_fn: EindirEvalFn,
@@ -226,11 +271,15 @@ pub struct eindir_objective_t {
     pub grad_fn: EindirGradFn,
     /// Opaque context forwarded verbatim to every callback invocation.
     pub user_data: *mut c_void,
-    /// Optional destructor for `user_data`; called by eindir_objective_free.
+    /// Optional destructor for `user_data`; called by `eindir_objective_free`
+    /// when `user_data` is not NULL.
     /// Set to NULL when embedding; manage cleanup in the derived struct's own
     /// free function.
     pub free_fn: EindirFreeFn,
     /// Optional semantic descriptor owned by the embedding producer.
+    ///
+    /// `eindir_objective_new` sets it to NULL and no function sets it later;
+    /// an embedding producer fills it in. eindir never frees it.
     pub descriptor: *const eindir_objective_descriptor_t,
 }
 
@@ -239,12 +288,39 @@ unsafe impl Send for eindir_objective_t {}
 unsafe impl Sync for eindir_objective_t {}
 
 /// Returns the stable ABI family name as a NUL-terminated ASCII string.
+///
+/// The string is `eindir.objective` and has static lifetime.
 #[unsafe(no_mangle)]
 pub extern "C" fn eindir_core_abi_family() -> *const c_char {
     EINDIR_ABI_FAMILY.as_ptr().cast()
 }
 
 /// Returns the native ABI metadata for [`eindir_objective_t`].
+///
+/// This build reports ABI 1.2, objective layout 3, DLPack 1.0, and the
+/// feature bits [`EINDIR_ABI_FEATURE_GRADIENT`], [`EINDIR_ABI_FEATURE_BATCH`]
+/// and [`EINDIR_ABI_FEATURE_TRY_CALLBACKS`]. The stamp describes
+/// `eindir_objective_t` only; the fallible handle has no stamp of its own,
+/// and its presence is the `EINDIR_ABI_FEATURE_TRY_CALLBACKS` bit.
+///
+/// # Examples
+///
+/// ```
+/// use eindir_core::ffi::{
+///     EINDIR_ABI_FEATURE_TRY_CALLBACKS, eindir_abi_stamp_t, eindir_core_abi_compatible,
+///     eindir_core_abi_stamp,
+/// };
+///
+/// let mine = eindir_core_abi_stamp();
+/// assert_eq!((mine.abi_major, mine.abi_minor, mine.objective_layout), (1, 2, 3));
+/// assert_ne!(mine.features & EINDIR_ABI_FEATURE_TRY_CALLBACKS, 0);
+///
+/// // A consumer built against ABI 1.1 is accepted; one built against 2.0 is not.
+/// let older = eindir_abi_stamp_t { abi_minor: 1, ..mine };
+/// assert_eq!(unsafe { eindir_core_abi_compatible(&older) }, 1);
+/// let newer = eindir_abi_stamp_t { abi_major: 2, ..mine };
+/// assert_eq!(unsafe { eindir_core_abi_compatible(&newer) }, 0);
+/// ```
 #[unsafe(no_mangle)]
 pub extern "C" fn eindir_core_abi_stamp() -> eindir_abi_stamp_t {
     eindir_abi_stamp_t {
@@ -262,6 +338,13 @@ pub extern "C" fn eindir_core_abi_stamp() -> eindir_abi_stamp_t {
 }
 
 /// Returns nonzero when `stamp` can be consumed by this eindir ABI.
+///
+/// A consumer fills `stamp` with the values it was built against. The check
+/// passes when `abi_major`, `objective_layout`, `objective_size`,
+/// `objective_align` and `dlpack_major` equal this library's, `abi_minor`
+/// and `dlpack_minor` are at most this library's, and every bit set in
+/// `features` is one this library reports. NULL gives 0. It records no
+/// message for `eindir_last_error()`.
 ///
 /// # Safety
 ///
@@ -285,6 +368,8 @@ pub unsafe extern "C" fn eindir_core_abi_compatible(stamp: *const eindir_abi_sta
 }
 
 /// Return the semantic descriptor attached to an objective, or NULL.
+///
+/// NULL for a NULL `obj` and for a handle from `eindir_objective_new`.
 ///
 /// # Safety
 ///
@@ -316,8 +401,57 @@ fn required_string_matches(actual: *const c_char, required: *const c_char) -> bo
 /// Return nonzero when `actual` satisfies every requirement in `required`.
 ///
 /// A non-empty string or nonzero scalar in `required` is exact; an empty or
-/// zero field acts as a wildcard. Operation bits are checked as a subset so a
+/// zero field, or a NULL string, acts as a wildcard. The exception is
+/// `schema_id`, which is never a wildcard: both sides must set it and the
+/// strings must be equal. Operation bits are checked as a subset so a
 /// producer may advertise additional capabilities without breaking consumers.
+///
+/// Returns 0 on a mismatch or a NULL argument, and records a message for
+/// `eindir_last_error()` then. The message does not name the field.
+///
+/// # Examples
+///
+/// ```
+/// use std::ptr::null;
+/// use eindir_core::eindir_objective_descriptor_t;
+/// use eindir_core::ffi::*;
+///
+/// let actual = eindir_objective_descriptor_t {
+///     schema_id: c"example.objective.v1".as_ptr(),
+///     producer_id: c"my-engine".as_ptr(),
+///     length_unit: c"angstrom".as_ptr(),
+///     energy_unit: c"eV".as_ptr(),
+///     energy_sign: 1,
+///     gradient_sign: 1,
+///     operations: EINDIR_OBJECTIVE_OPERATION_ENERGY | EINDIR_OBJECTIVE_OPERATION_FORCES,
+///     tensor_device_type: EINDIR_TENSOR_DEVICE_CPU,
+///     tensor_dtype_code: EINDIR_TENSOR_DTYPE_FLOAT,
+///     tensor_dtype_bits: 64,
+///     tensor_dtype_lanes: 1,
+///     tensor_layout: EINDIR_TENSOR_LAYOUT_CONTIGUOUS,
+///     callback_lifetime: EINDIR_CALLBACK_LIFETIME_BORROWED_SYNC,
+/// };
+/// // Require the schema and the energy unit, and accept anything else.
+/// let mut required = eindir_objective_descriptor_t {
+///     schema_id: c"example.objective.v1".as_ptr(),
+///     producer_id: null(),
+///     length_unit: null(),
+///     energy_unit: c"eV".as_ptr(),
+///     energy_sign: 0,
+///     gradient_sign: 0,
+///     operations: EINDIR_OBJECTIVE_OPERATION_ENERGY,
+///     tensor_device_type: 0,
+///     tensor_dtype_code: 0,
+///     tensor_dtype_bits: 0,
+///     tensor_dtype_lanes: 0,
+///     tensor_layout: 0,
+///     callback_lifetime: 0,
+/// };
+/// assert_eq!(unsafe { eindir_objective_descriptor_compatible(&actual, &required) }, 1);
+/// // schema_id is never a wildcard.
+/// required.schema_id = null();
+/// assert_eq!(unsafe { eindir_objective_descriptor_compatible(&actual, &required) }, 0);
+/// ```
 ///
 /// # Safety
 ///
@@ -477,7 +611,12 @@ pub(crate) unsafe fn copy_bounds(
 /// Create a new heap-allocated objective handle from C callbacks.
 ///
 /// Bounds data is copied from the DLPack tensors; the caller may free them
-/// after this call returns.  Returns NULL on failure.
+/// after this call returns.  Returns NULL on failure, with the reason in
+/// `eindir_last_error()`; `free_fn` is not called then.
+///
+/// Each bounds tensor must be 1-D with `shape[0] == dim` and a non-NULL
+/// `data`; those are the only checks. `low <= high` is not checked, and
+/// `dim = 0` gives a valid handle. The descriptor is NULL.
 ///
 /// The caller must eventually pass the returned pointer to
 /// [`eindir_objective_free`].
@@ -536,9 +675,10 @@ pub unsafe extern "C" fn eindir_objective_new(
 
 /// Free an objective handle created by [`eindir_objective_new`].
 ///
-/// Calls `free_fn(user_data)` if a destructor was registered, frees the bounds
-/// arrays, then frees the struct.  Do NOT call this on embedded objectives;
-/// call the owning struct's free function (e.g. `rgpot_potential_free`) instead.
+/// Calls `free_fn(user_data)` if a destructor was registered and `user_data`
+/// is not NULL, frees the bounds arrays, then frees the struct. NULL is a
+/// no-op. Do NOT call this on embedded objectives; call the owning struct's
+/// free function (e.g. `rgpot_potential_free`) instead.
 ///
 /// # Safety
 ///
@@ -569,7 +709,7 @@ pub unsafe extern "C" fn eindir_objective_free(obj: *mut eindir_objective_t) {
 // Accessors
 // ---------------------------------------------------------------------------
 
-/// Returns the number of input dimensions.
+/// Returns the number of input dimensions, or 0 for NULL.
 ///
 /// # Safety
 ///
@@ -582,7 +722,12 @@ pub unsafe extern "C" fn eindir_objective_dim(obj: *const eindir_objective_t) ->
     unsafe { (*obj).dim }
 }
 
-/// Writes the lower-bound vector into `out` (pre-allocated DLPack tensor, shape `[dim]`).
+/// Writes the lower-bound vector into `out`, a caller-allocated DLPack tensor
+/// with room for `dim` doubles.
+///
+/// Copies `dim` doubles to `out->dl_tensor.data`; the shape of `out` is not
+/// read. Returns `EINDIR_INVALID_PARAMETER` for a NULL `obj`, `out` or data
+/// pointer.
 ///
 /// # Safety
 ///
@@ -610,7 +755,8 @@ pub unsafe extern "C" fn eindir_objective_bounds_low(
     }))
 }
 
-/// Writes the upper-bound vector into `out` (pre-allocated DLPack tensor, shape `[dim]`).
+/// Writes the upper-bound vector into `out`, a caller-allocated DLPack tensor
+/// with room for `dim` doubles. Checks as [`eindir_objective_bounds_low`].
 ///
 /// # Safety
 ///
@@ -644,6 +790,11 @@ pub unsafe extern "C" fn eindir_objective_bounds_high(
 
 /// Evaluate the objective at point `x`.
 ///
+/// Returns `EINDIR_INVALID_PARAMETER` for a NULL `obj`, `x` or `value_out`,
+/// `EINDIR_INTERNAL_ERROR` when a Rust panic is caught, and otherwise the
+/// callback's status unchanged. `x` goes to the callback as given: its shape
+/// is not compared with `dim`.
+///
 /// # Safety
 ///
 /// `obj` must point to a live objective, `x` must be readable by its registered
@@ -674,7 +825,8 @@ pub unsafe extern "C" fn eindir_objective_eval(
 
 /// Compute the gradient at point `x`.
 ///
-/// Returns `EINDIR_INVALID_PARAMETER` when no gradient callback was registered.
+/// Returns `EINDIR_INVALID_PARAMETER` when no gradient callback was registered
+/// or an argument is NULL, and otherwise follows [`eindir_objective_eval`].
 ///
 /// # Safety
 ///
@@ -710,7 +862,8 @@ pub unsafe extern "C" fn eindir_objective_grad(
     }))
 }
 
-/// Returns non-zero if the objective has a gradient callback.
+/// Returns 1 if the objective has a gradient callback, and 0 if not or for
+/// NULL.
 ///
 /// # Safety
 ///
@@ -739,14 +892,29 @@ use crate::{Bounds, DifferentiableObjective, Objective};
 use ndarray::{Array1, ArrayView1};
 
 /// Rust-side view over a C objective, implementing Objective/Gradient.
+///
+/// The traits cannot fail, so failures become values: `eval` returns NaN
+/// when the callback returns a status other than `EINDIR_SUCCESS`, and
+/// `grad` returns zeros without a gradient callback and ignores the
+/// callback's status, returning what it wrote over zeros. Use
+/// `EindirTryObjectiveWrapper` to receive the status and a message.
+///
+/// The bounds are copied once, at construction, with slack 0.
 pub struct EindirObjectiveWrapper<'a> {
     obj: &'a eindir_objective_t,
     bounds: Bounds<f64>,
 }
 
 impl<'a> EindirObjectiveWrapper<'a> {
+    /// Wraps a handle.
+    ///
     /// # Safety
+    ///
     /// `obj.low` and `obj.high` must point to `obj.dim` valid f64 values.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `low[i] > high[i]` for any `i`, as [`Bounds::new`].
     pub unsafe fn new(obj: &'a eindir_objective_t) -> Self {
         let low = unsafe { std::slice::from_raw_parts(obj.low, obj.dim) };
         let high = unsafe { std::slice::from_raw_parts(obj.high, obj.dim) };

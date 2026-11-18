@@ -33,8 +33,30 @@ impl<O: Objective<f64>> ReducedObjective<O> {
     /// Builds a reduced objective from an inner objective, a full-space origin,
     /// an `n x k` basis, and the reduced box `bounds` in `R^k`.
     ///
+    /// The basis columns need not be orthonormal.
+    ///
+    /// # Panics
+    ///
     /// Panics when the shapes disagree: `origin.len()` and `basis.nrows()` must
     /// equal `inner.dim()`, and `basis.ncols()` must equal `bounds.dims`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use eindir_core::{Bounds, Objective, Rastrigin, ReducedObjective};
+    /// use ndarray::array;
+    ///
+    /// // Search Rastrigin in 2-D along the diagonal x = (r, r).
+    /// let reduced = ReducedObjective::new(
+    ///     Rastrigin::<2>::new(),
+    ///     array![0.0, 0.0],
+    ///     array![[1.0], [1.0]],
+    ///     Bounds::new(array![-1.0], array![1.0], 0.0),
+    /// );
+    /// assert_eq!(Objective::dim(&reduced), 1);
+    /// assert_eq!(reduced.decode(array![0.5].view()), array![0.5, 0.5]);
+    /// assert_eq!(reduced.eval(array![0.0].view()), 0.0);
+    /// ```
     pub fn new(inner: O, origin: Array1<f64>, basis: Array2<f64>, bounds: Bounds<f64>) -> Self {
         assert_eq!(
             origin.len(),
@@ -106,8 +128,26 @@ impl ChebyshevSurrogate {
     /// Builds a surrogate from a reduced box, the total-degree multi-index set,
     /// and one coefficient per multi-index.
     ///
+    /// # Panics
+    ///
     /// Panics when `terms.len() != coeffs.len()` or when any multi-index length
     /// differs from `bounds.dims`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use eindir_core::{Bounds, ChebyshevSurrogate, Objective};
+    /// use ndarray::array;
+    ///
+    /// // 1 + 2 T_1(t) on [0, 1], where t = 2 x - 1.
+    /// let s = ChebyshevSurrogate::new(
+    ///     Bounds::new(array![0.0], array![1.0], 0.0),
+    ///     vec![vec![0], vec![1]],
+    ///     array![1.0, 2.0],
+    /// );
+    /// assert_eq!(s.eval(array![1.0].view()), 3.0);
+    /// assert_eq!(s.grad(array![0.5].view()), array![4.0]);
+    /// ```
     pub fn new(bounds: Bounds<f64>, terms: Vec<Vec<usize>>, coeffs: Array1<f64>) -> Self {
         assert_eq!(
             terms.len(),
@@ -173,6 +213,9 @@ impl ChebyshevSurrogate {
     }
 
     /// Analytic gradient of the surrogate at `x`, in box coordinates.
+    ///
+    /// A coordinate outside the box, or on an axis of zero width, has
+    /// gradient `0`.
     pub fn grad(&self, x: ArrayView1<f64>) -> Array1<f64> {
         let k = self.bounds.dims;
         let (vals, ders) = self.tables(x);

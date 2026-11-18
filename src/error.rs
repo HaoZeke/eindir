@@ -1,6 +1,11 @@
 use thiserror::Error;
 
-/// Error type returned by all fallible operations in `eindir-core`.
+/// Shape and range errors for crates built on `eindir-core`.
+///
+/// No function in `eindir-core` returns it: the constructors here panic on
+/// bad input (see each `# Panics` section), and fallible objectives use their
+/// own error types through [`crate::TryObjective`]. It is exported for
+/// downstream crates that want a shared error vocabulary.
 #[derive(Debug, Error)]
 pub enum Error {
     /// Returned when an input array's shape disagrees with the expected dimensionality.

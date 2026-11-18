@@ -16,6 +16,10 @@ impl<const D: usize> Ackley<D> {
     const B: f64 = 0.2;
 
     /// Constructs an Ackley objective in `D` dimensions.
+    ///
+    /// # Panics
+    ///
+    /// Panics when `D == 0`.
     pub fn new() -> Self {
         assert!(D > 0, "Ackley requires at least one dimension");
         Self {

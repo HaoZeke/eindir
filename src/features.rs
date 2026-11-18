@@ -13,13 +13,29 @@ pub struct BoxGeometry {
     pub dim: usize,
     /// Mean side length.
     pub mean_width: f64,
-    /// max_j width_j / min_j width_j (≥ 1). Infinite sides contribute a large aspect.
+    /// `max_j width_j / min_j width_j`, at least 1. A side that is not finite
+    /// counts as width 1, like a side of zero width.
     pub aspect_ratio: f64,
     /// Per-coordinate widths (finite; non-positive replaced by 1).
     pub widths: Vec<f64>,
 }
 
 /// Extract geometry from bounds. Safe default for empty/invalid boxes.
+///
+/// An empty box gives `dim = 0`, `mean_width = 1` and `aspect_ratio = 1`.
+/// A side that is not finite or not positive counts as width 1.
+///
+/// # Examples
+///
+/// ```
+/// use eindir_core::{Bounds, box_geometry};
+/// use ndarray::array;
+///
+/// let g = box_geometry(&Bounds::new(array![0.0, 0.0], array![1.0, 100.0], 0.0));
+/// assert_eq!(g.dim, 2);
+/// assert_eq!(g.mean_width, 50.5);
+/// assert_eq!(g.aspect_ratio, 100.0);
+/// ```
 pub fn box_geometry<T: Float>(bounds: &Bounds<T>) -> BoxGeometry {
     let dim = bounds.dims;
     if dim == 0 {
@@ -59,11 +75,22 @@ pub fn box_geometry<T: Float>(bounds: &Bounds<T>) -> BoxGeometry {
     }
 }
 
-/// Compensated energy difference `f_new - f_cur` for acceptance channels.
+/// Energy difference `f_new - f_cur` for acceptance channels.
 ///
-/// Uses a two-sum style compensation when both values are finite so that
-/// cancellation near equal energies is less biased than a bare subtraction.
-/// Falls back to ordinary subtraction if either argument is non-finite.
+/// For finite arguments it computes Knuth's two-sum of `f_new` and `-f_cur`
+/// and adds the error term back. That error is at most half an ulp of the
+/// rounded sum, so the result equals `f_new - f_cur`, the correctly rounded
+/// difference; the function documents the intent and keeps one call site.
+/// Non-finite arguments use ordinary subtraction.
+///
+/// # Examples
+///
+/// ```
+/// use eindir_core::compensated_delta;
+///
+/// assert_eq!(compensated_delta(1.0 + 1e-15, 1.0), (1.0 + 1e-15) - 1.0);
+/// assert!(compensated_delta(f64::NAN, 1.0).is_nan());
+/// ```
 #[inline]
 pub fn compensated_delta(f_new: f64, f_cur: f64) -> f64 {
     if !f_new.is_finite() || !f_cur.is_finite() {
@@ -81,7 +108,10 @@ pub fn compensated_delta(f_new: f64, f_cur: f64) -> f64 {
 
 /// Dimension-aware isotropic proposal scale: `c * mean_width / sqrt(dim)`.
 ///
-/// Matches the paper's dimension-aware Move scale (prevents √D acceptance collapse).
+/// Scaling the step by `1/sqrt(dim)` keeps the acceptance rate of an
+/// isotropic random-walk proposal from collapsing as the dimension grows.
+/// A `c` that is not finite or not positive is replaced by `0.25`, `dim = 0`
+/// counts as 1, and the result is at least `1e-12`.
 #[inline]
 pub fn isotropic_proposal_scale(geom: &BoxGeometry, c: f64) -> f64 {
     let d = geom.dim.max(1) as f64;

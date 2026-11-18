@@ -89,19 +89,40 @@ where
 
 /// Central-difference adapter around any `Objective<f64>`.
 /// Use only when no native gradient is available.
+///
+/// Component `i` is `(f(x + h e_i) - f(x - h e_i)) / (2 h)`, so one
+/// gradient costs `2 * dim` objective evaluations. The step is absolute,
+/// in the units of `x`, and the stencil may step up to `h` outside the
+/// bounds. The adapter does not implement [`Objective`] itself; pair it with
+/// the objective in your own type, or call [`Gradient::grad`] directly.
+///
+/// # Examples
+///
+/// ```
+/// use eindir_core::{FiniteDiffGradient, Gradient, Rosenbrock};
+/// use ndarray::array;
+///
+/// let fd = FiniteDiffGradient::new(Rosenbrock::<2>::new());
+/// let g = fd.grad(array![1.0, 1.0].view());
+/// assert!(g.iter().all(|gi| gi.abs() < 1e-6));
+/// ```
 pub struct FiniteDiffGradient<O: Objective<f64>> {
     /// Objective evaluated by the central-difference stencil.
     pub obj: O,
-    /// Symmetric perturbation step.
+    /// Absolute perturbation step, in the units of `x`. Default `1e-5`.
     pub h: f64,
 }
 
 impl<O: Objective<f64>> FiniteDiffGradient<O> {
-    /// Constructs a central-difference adapter with a conservative default step.
+    /// Constructs a central-difference adapter with step `h = 1e-5`.
     pub fn new(obj: O) -> Self {
         Self { obj, h: 1e-5 }
     }
     /// Constructs a central-difference adapter with a caller-selected step.
+    ///
+    /// # Panics
+    ///
+    /// Panics unless `h > 0` (so a NaN step panics too).
     pub fn with_step(obj: O, h: f64) -> Self {
         assert!(h > 0.0, "h must be positive");
         Self { obj, h }
