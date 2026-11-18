@@ -36,6 +36,71 @@
 //! On failure a function records a message for [`eindir_last_error`](crate::ffi::eindir_last_error) when
 //! the failure is its own (a NULL argument, a bad shape, a panic). A status
 //! returned by a callback is passed through unchanged.
+//!
+//! # Examples
+//!
+//! Checking a stamp:
+//!
+//! ```
+//! use eindir_core::ffi::{
+//!     EINDIR_ABI_FEATURE_TRY_CALLBACKS, eindir_abi_stamp_t, eindir_core_abi_compatible,
+//!     eindir_core_abi_stamp,
+//! };
+//!
+//! let mine = eindir_core_abi_stamp();
+//! assert_eq!((mine.abi_major, mine.abi_minor, mine.objective_layout), (1, 2, 3));
+//! assert_ne!(mine.features & EINDIR_ABI_FEATURE_TRY_CALLBACKS, 0);
+//!
+//! // A consumer built against ABI 1.1 is accepted; one built against 2.0 is not.
+//! let older = eindir_abi_stamp_t { abi_minor: 1, ..mine };
+//! assert_eq!(unsafe { eindir_core_abi_compatible(&older) }, 1);
+//! let newer = eindir_abi_stamp_t { abi_major: 2, ..mine };
+//! assert_eq!(unsafe { eindir_core_abi_compatible(&newer) }, 0);
+//! ```
+//!
+//! Checking a descriptor:
+//!
+//! ```
+//! use std::ptr::null;
+//! use eindir_core::eindir_objective_descriptor_t;
+//! use eindir_core::ffi::*;
+//!
+//! let actual = eindir_objective_descriptor_t {
+//!     schema_id: c"example.objective.v1".as_ptr(),
+//!     producer_id: c"my-engine".as_ptr(),
+//!     length_unit: c"angstrom".as_ptr(),
+//!     energy_unit: c"eV".as_ptr(),
+//!     energy_sign: 1,
+//!     gradient_sign: 1,
+//!     operations: EINDIR_OBJECTIVE_OPERATION_ENERGY | EINDIR_OBJECTIVE_OPERATION_FORCES,
+//!     tensor_device_type: EINDIR_TENSOR_DEVICE_CPU,
+//!     tensor_dtype_code: EINDIR_TENSOR_DTYPE_FLOAT,
+//!     tensor_dtype_bits: 64,
+//!     tensor_dtype_lanes: 1,
+//!     tensor_layout: EINDIR_TENSOR_LAYOUT_CONTIGUOUS,
+//!     callback_lifetime: EINDIR_CALLBACK_LIFETIME_BORROWED_SYNC,
+//! };
+//! // Require the schema and the energy unit, and accept anything else.
+//! let mut required = eindir_objective_descriptor_t {
+//!     schema_id: c"example.objective.v1".as_ptr(),
+//!     producer_id: null(),
+//!     length_unit: null(),
+//!     energy_unit: c"eV".as_ptr(),
+//!     energy_sign: 0,
+//!     gradient_sign: 0,
+//!     operations: EINDIR_OBJECTIVE_OPERATION_ENERGY,
+//!     tensor_device_type: 0,
+//!     tensor_dtype_code: 0,
+//!     tensor_dtype_bits: 0,
+//!     tensor_dtype_lanes: 0,
+//!     tensor_layout: 0,
+//!     callback_lifetime: 0,
+//! };
+//! assert_eq!(unsafe { eindir_objective_descriptor_compatible(&actual, &required) }, 1);
+//! // schema_id is never a wildcard.
+//! required.schema_id = null();
+//! assert_eq!(unsafe { eindir_objective_descriptor_compatible(&actual, &required) }, 0);
+//! ```
 
 use std::cell::RefCell;
 use std::ffi::{CStr, CString};
@@ -302,25 +367,6 @@ pub extern "C" fn eindir_core_abi_family() -> *const c_char {
 /// and [`EINDIR_ABI_FEATURE_TRY_CALLBACKS`]. The stamp describes
 /// `eindir_objective_t` only; the fallible handle has no stamp of its own,
 /// and its presence is the `EINDIR_ABI_FEATURE_TRY_CALLBACKS` bit.
-///
-/// # Examples
-///
-/// ```
-/// use eindir_core::ffi::{
-///     EINDIR_ABI_FEATURE_TRY_CALLBACKS, eindir_abi_stamp_t, eindir_core_abi_compatible,
-///     eindir_core_abi_stamp,
-/// };
-///
-/// let mine = eindir_core_abi_stamp();
-/// assert_eq!((mine.abi_major, mine.abi_minor, mine.objective_layout), (1, 2, 3));
-/// assert_ne!(mine.features & EINDIR_ABI_FEATURE_TRY_CALLBACKS, 0);
-///
-/// // A consumer built against ABI 1.1 is accepted; one built against 2.0 is not.
-/// let older = eindir_abi_stamp_t { abi_minor: 1, ..mine };
-/// assert_eq!(unsafe { eindir_core_abi_compatible(&older) }, 1);
-/// let newer = eindir_abi_stamp_t { abi_major: 2, ..mine };
-/// assert_eq!(unsafe { eindir_core_abi_compatible(&newer) }, 0);
-/// ```
 #[unsafe(no_mangle)]
 pub extern "C" fn eindir_core_abi_stamp() -> eindir_abi_stamp_t {
     eindir_abi_stamp_t {
@@ -408,50 +454,6 @@ fn required_string_matches(actual: *const c_char, required: *const c_char) -> bo
 ///
 /// Returns 0 on a mismatch or a NULL argument, and records a message for
 /// `eindir_last_error()` then. The message does not name the field.
-///
-/// # Examples
-///
-/// ```
-/// use std::ptr::null;
-/// use eindir_core::eindir_objective_descriptor_t;
-/// use eindir_core::ffi::*;
-///
-/// let actual = eindir_objective_descriptor_t {
-///     schema_id: c"example.objective.v1".as_ptr(),
-///     producer_id: c"my-engine".as_ptr(),
-///     length_unit: c"angstrom".as_ptr(),
-///     energy_unit: c"eV".as_ptr(),
-///     energy_sign: 1,
-///     gradient_sign: 1,
-///     operations: EINDIR_OBJECTIVE_OPERATION_ENERGY | EINDIR_OBJECTIVE_OPERATION_FORCES,
-///     tensor_device_type: EINDIR_TENSOR_DEVICE_CPU,
-///     tensor_dtype_code: EINDIR_TENSOR_DTYPE_FLOAT,
-///     tensor_dtype_bits: 64,
-///     tensor_dtype_lanes: 1,
-///     tensor_layout: EINDIR_TENSOR_LAYOUT_CONTIGUOUS,
-///     callback_lifetime: EINDIR_CALLBACK_LIFETIME_BORROWED_SYNC,
-/// };
-/// // Require the schema and the energy unit, and accept anything else.
-/// let mut required = eindir_objective_descriptor_t {
-///     schema_id: c"example.objective.v1".as_ptr(),
-///     producer_id: null(),
-///     length_unit: null(),
-///     energy_unit: c"eV".as_ptr(),
-///     energy_sign: 0,
-///     gradient_sign: 0,
-///     operations: EINDIR_OBJECTIVE_OPERATION_ENERGY,
-///     tensor_device_type: 0,
-///     tensor_dtype_code: 0,
-///     tensor_dtype_bits: 0,
-///     tensor_dtype_lanes: 0,
-///     tensor_layout: 0,
-///     callback_lifetime: 0,
-/// };
-/// assert_eq!(unsafe { eindir_objective_descriptor_compatible(&actual, &required) }, 1);
-/// // schema_id is never a wildcard.
-/// required.schema_id = null();
-/// assert_eq!(unsafe { eindir_objective_descriptor_compatible(&actual, &required) }, 0);
-/// ```
 ///
 /// # Safety
 ///
