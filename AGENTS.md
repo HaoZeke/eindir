@@ -12,6 +12,7 @@ The anneal optimiser is built on it.
 
 - Objectives within box bounds: `Objective<T>` over `Bounds<T>`, with `eval`, `eval_batch`, and `eval_batch_parallel`, which uses rayon from `EVAL_BATCH_PARALLEL_MIN` points up.
 - Halton point sets: `low_discrepancy_points`, `shifted_low_discrepancy_points`, `boundary_anchored_low_discrepancy_points`, `halton_points`, `halton_unit`.
+- Fallible evaluation: `TryObjective<T>`, `TryGradient<T>` and `TryDifferentiableObjective<T>` with an associated error type that passes through unchanged. Every `Objective` and `Gradient` is one with `Error = Infallible`. The adapters are `NanOnError`, `PanicOnError`, `TryOracle`, `TryFiniteDiffGradient` and `try_eval_batch_parallel`.
 - Gradients: the `Gradient<T>` trait, `AnalyticGradient`, `FiniteDiffGradient`, `DifferentiableObjective` and, with the `autodiff` feature, `ForwardAd`.
 - A thermostat for the generalized Langevin equation (GLE): `GleThermostat`, `optimal_sampling_drift`, `matrix_exp`, `ldl_sqrt`.
 - Surrogates: `AdditiveSurrogate`, `ChebyshevSurrogate`, `ReducedObjective`.
@@ -27,7 +28,7 @@ Bindings:
 ## Layout
 
 - `Cargo.toml`: the crate, its feature flags and the only hand-written version.
-- `src/`: the Rust sources, with the C ABI in `ffi.rs` and the `_core` extension in `python.rs` and `py_objective.rs`.
+- `src/`: the Rust sources, with the fallible traits in `fallible.rs`, the C ABI in `ffi.rs` and its fallible callbacks in `ffi_try.rs` and the `_core` extension in `python.rs` and `py_objective.rs`.
 - `python/eindir/`: the pure-Python package (`NumLimit`, `ObjectiveFunction`, array API helpers, `viz`).
 - `pytest/`: the pytest suite.
 - `tests/`: Rust integration tests, `ffi_smoke.c`, `header_check.c` and `header_check.cpp`.
@@ -144,6 +145,8 @@ Rust (see `skills/eindir-rust/`):
 - `DifferentiableObjective` has no blanket impl, so add an empty `impl DifferentiableObjective<f64> for T {}`.
 - `Bounds::new` panics on lengths that differ, on a negative slack and on `low > high`.
   `mkpoint` panics when a coordinate has `low == high`.
+- Do not implement `TryObjective` or `TryGradient` by hand for a type that implements `Objective` or `Gradient`: the blanket impls already cover it, and a second impl is E0119.
+ Their methods are `dims`, `domain` and `grad_dims`, so that `x.dim()` stays unambiguous, and the gradient's error is `GradError`, so that `O::Error` is unambiguous under `TryDifferentiableObjective`.
 - `GleThermostat::canonical(drift, dt, temperature, kb)` takes Boltzmann's constant as its fourth argument and has no mass argument.
 
 C (see `skills/eindir-c-abi/`):
@@ -156,6 +159,8 @@ C (see `skills/eindir-c-abi/`):
   Use the v1.0 headers pinned in `ci.yml`.
 - eindir passes tensors to the callbacks unchecked.
   A failing callback leaves `eindir_last_error()` as it was, and a success does not clear it.
+- `eindir_try_objective_t` is a separate handle with callbacks that return an `int32_t` status and write a message.
+  `eindir_objective_t` keeps its callbacks and its layout, and a failure of its callbacks still reaches Rust only as NaN.
 - `schema_id` in a required descriptor is never a wildcard, although the header says empty fields are.
 
 Repository:

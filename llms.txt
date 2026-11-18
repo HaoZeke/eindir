@@ -30,6 +30,7 @@ That skill and the three others under `skills/` give worked examples of common t
 
 - [Architecture](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/architecture.org): Describes the repository layout, the three crate types (rlib, cdylib, staticlib) and how the Python, C and C++ bindings are produced.
 - [The Primitives (traits & design)](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/explanation/primitives.org): The design of the Objective, low-discrepancy, GLE and surrogate primitives and how they feed one another.
+- [Fallible objectives](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/explanation/fallible-objectives.org): The TryObjective, TryGradient and TryDifferentiableObjective traits with a caller-chosen error type, their blanket impls for infallible objectives, the adapters, the C status-and-message callbacks, and how rgmin should return the error unchanged.
 - [GLE Mechanics](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/explanation/gle.org): What the GLE thermostat stores and computes, why the covariance fixes correctness while the drift sets the speed, and how anneal drives it.
 - [Surrogate Mechanics](https://raw.githubusercontent.com/HaoZeke/eindir/main/docs/orgmode/explanation/surrogates.org): The additive surrogate as a rank-1 functional tensor train, its O(d) independence sampling and the Metropolis correction on the true objective.
 

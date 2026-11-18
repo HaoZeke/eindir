@@ -1,0 +1,121 @@
+#+TITLE: Fallible objectives
+#+OPTIONS: toc:nil todo:nil num:nil author:nil title:nil ^:nil
+
+* The problem
+
+=Objective::eval= and =Gradient::grad= return a value, not a =Result=.
+A potential energy surface that can fail (the engine returns an error, the geometry has a non-finite coordinate, the engine refuses the configuration) can only panic or return a sentinel such as NaN.
+The sentinel loses the reason, and a panic cannot cross a C boundary.
+Both show up in the optimisers that consume the crate: rgmin (0.6.0, through =eindir-core= with the =capi= feature) wraps a C objective in a closure that returns =(INFINITY, NaN)= when the engine reports failure, and reports "eindir evaluation failed" with no cause.
+
+The fallible path is additive.
+=Objective=, =Gradient= and =DifferentiableObjective= are unchanged, and so is the C callback ABI of =eindir_objective_t=.
+
+* The traits
+
+| Trait                          | Methods                                          | Error type  |
+|--------------------------------+--------------------------------------------------+-------------|
+| =TryObjective<T>=              | =dims=, =domain=, =try_eval=, =try_eval_batch=, =known_min= | =Error=     |
+| =TryGradient<T>=               | =try_grad=, =grad_dims=                          | =GradError= |
+| =TryDifferentiableObjective<T>= | =try_value_and_gradient=                         | both, equal |
+
+Each error type is the implementor's own.
+Nothing boxes it, converts it or wraps it, so a function generic over =O: TryDifferentiableObjective<f64>= returns =O::Error= exactly as the objective produced it.
+
+** Blanket impls
+
+Every =Objective<T>= is a =TryObjective<T>= with =Error = core::convert::Infallible=, every =Gradient<T>= is a =TryGradient<T>= with =GradError = Infallible=, and every =DifferentiableObjective<T>= is a =TryDifferentiableObjective<T>=.
+The blanket impls call the infallible methods, so an overridden =eval_batch=, =global_min= or fused =value_and_gradient= is kept.
+A driver written against the =Try*= traits therefore accepts both kinds of objective, and for an infallible one the error branch is statically unreachable: =match e {}= on an =Infallible= needs no arm.
+
+A type that implements =Objective= must not implement =TryObjective= by hand, since the blanket impl already covers it.
+A type that does not implement =Objective= can implement =TryObjective= freely: a downstream crate's own type does not overlap with the blanket impl, and =tests/fallible.rs= checks that from outside the crate.
+
+** Names
+
+The methods are =dims=, =domain= and =grad_dims=, not =dim=, =bounds= and =dim=.
+Because of the blanket impls an infallible type is also a =Try*= type, and equal names would make =x.dim()= ambiguous (E0034) wherever both traits are in scope.
+
+The gradient's error is =GradError= so that =O::Error= is unambiguous for a driver bounded by =TryDifferentiableObjective=.
+Two associated types both called =Error= in the two supertraits would make =O::Error= fail with E0221, and the driver would have to write =<O as TryObjective<f64>>::Error=.
+A trait object spells both: =dyn TryDifferentiableObjective<f64, Error = E, GradError = E>=.
+
+* Adapters
+
+| Direction                | Item                                       | What it does                                                          |
+|--------------------------+--------------------------------------------+-----------------------------------------------------------------------|
+| infallible to fallible   | blanket impls                              | =Ok(eval(x))=, with =Infallible=                                      |
+| fallible to infallible   | =NanOnError::new(inner, sink)=             | NaN for a failed value or gradient; every error goes to =sink= first  |
+| fallible to infallible   | =PanicOnError::new(inner)=                 | panics with the =Debug= form of the error, for tests and scripts      |
+| closure                  | =TryOracle::new(bounds, f)=                | =f: x -> Result<(f, grad), E>=, one call for both                     |
+| value only to gradient   | =TryFiniteDiffGradient::new(obj)=          | central differences over a =TryObjective=; stops at the first error   |
+| batch                    | =try_eval_batch_parallel=                  | Rayon above =EVAL_BATCH_PARALLEL_MIN=; the lowest failing row's error |
+
+=NanOnError= is the existing sentinel convention with the error kept: the sink can log the error, count it, or store the first one.
+
+* C callbacks
+
+=eindir_objective_t= is untouched: same callbacks, same layout (still layout 3), same =eindir_status_t=.
+The fallible form is a second handle, =eindir_try_objective_t=, because adding callback fields to the first would change its size and break every embedder.
+
+#+begin_src c
+typedef int32_t (*EindirTryEvalFn)(void *user_data,
+                                   const struct DLManagedTensorVersioned *x,
+                                   double *value_out,
+                                   char *message_out, uintptr_t message_cap);
+#+end_src
+
+- The callback returns =0= for success and any other value for failure, and writes a NUL-terminated message into the buffer eindir lends it (=EINDIR_TRY_MESSAGE_CAP= bytes, never NULL).
+  Statuses =1= and =2= mean invalid parameter and internal error, and the others belong to the callback.
+- =eindir_try_objective_eval= and =eindir_try_objective_grad= return the callback's status, copy the message into the caller's buffer (truncated to fit, and NULL is allowed) and also record it for =eindir_last_error()=.
+  The old entry points leave =eindir_last_error()= alone after a callback fails, and these do not.
+- In Rust, =EindirTryObjectiveWrapper= implements the =Try*= traits with =Error = CallbackError { code, message }=, so a failure reaches a generic driver with both fields intact.
+  Without a gradient callback =try_grad= fails with "no gradient callback"; the old wrapper returns zeros.
+- =eindir_core_abi_stamp()= reports ABI minor 2 and the feature bit =EINDIR_ABI_FEATURE_TRY_CALLBACKS=.
+  A consumer built against minor 1 still passes =eindir_core_abi_compatible=.
+
+* How rgmin should consume it
+
+rgmin on =develop= (version 0.6.0) names =DifferentiableObjective<f64>= 110 times, 89 of them as an =O: DifferentiableObjective<f64> + ?Sized= bound, mostly in =src/session.rs=, =src/hvp.rs=, =src/session/constrained.rs=, =src/accept.rs= and =src/qn.rs=.
+What it calls is small: =obj.eval(x)=, =obj.value_and_gradient(x)=, =obj.bounds()= and =Objective::dim(obj)=.
+=Oracle= adapts a closure, and =rgmin_minimize_eindir= adapts a C handle, turning a failed status into =(f64::INFINITY, NaN)=.
+The public steppers return =Result<Report>= with its own =#[non_exhaustive] Error=.
+
+The migration, in order:
+
+1. Depend on =eindir-core = "0.8"=. Nothing else changes, and 0.6.0 code builds as it is.
+2. Change the internal bounds from =DifferentiableObjective<f64>= to =TryDifferentiableObjective<f64>= and the calls to =try_eval=, =try_value_and_gradient=, =domain()= and =dims()=, propagating with =?=.
+   Because every =DifferentiableObjective= is a =TryDifferentiableObjective=, there is one implementation, not two.
+3. Add the error as a type parameter of the step result, as an enum that holds the caller's value without converting it:
+
+   #+begin_src rust
+   #[non_exhaustive]
+   pub enum StepError<E> {
+       /// rgmin's own failure: Dim, Oracle, TrustCollapsed, and so on.
+       Solver(Error),
+       /// The objective's error, exactly as it returned it.
+       Objective(E),
+   }
+
+   impl Solver {
+       pub fn try_step<O>(
+           &mut self,
+           obj: &O,
+           x: &mut Array1<f64>,
+       ) -> Result<Report, StepError<<O as TryObjective<f64>>::Error>>
+       where
+           O: TryDifferentiableObjective<f64> + ?Sized;
+   }
+   #+end_src
+
+   The existing =Solver::step= keeps its signature and calls =try_step=, mapping =StepError::Solver(e)= to =e= and matching the =Objective= variant away: with =Infallible= it is =match e {}=.
+   Where a caller wants no wrapper, the nested form =Result<Result<Report, Error>, E>= also moves =E= unchanged, but it cannot be used with =?= on both levels, so the enum is the better default.
+4. Add no bound on =E= (no =std::error::Error=, no =Debug=, no =Send=) beyond what a call needs.
+   =StepError<E>= can implement =Display= and =std::error::Error= under =E: Error=.
+5. State on failure: a failed =try_step= leaves =x= and the solver memory (curvature pairs, FIRE velocity, trust radius) as they were before the call, the way a non-finite answer does today.
+   A failure at a trial point of a line search or an =Accept::Energy= halving is the objective's refusal, and the step aborts with it by default.
+   A caller who wants a refused trial to count as a rise can pass a predicate =Fn(&E) -> bool= in =Control=, and rgmin then takes the existing non-finite backtracking branch for those errors only.
+6. For C, add =rgmin_minimize_eindir_try= over =eindir_try_objective_t=.
+   Its closure becomes a =TryOracle= or an =EindirTryObjectiveWrapper=, the first =CallbackError= is kept, and the status and message go to rgmin's own =set_last_error=, in place of "eindir evaluation failed".
+
+The public API of rgmin changes only by addition, so it is a minor release there too.
