@@ -14,6 +14,8 @@ pub mod autodiff;
 pub mod bounds;
 /// Error types shared by all fallible operations in `eindir-core`.
 pub mod error;
+/// Fallible objectives and gradients: `TryObjective`, `TryGradient` and adapters.
+pub mod fallible;
 /// Box geometry features and compensated ΔE.
 pub mod features;
 /// C ABI surface, gated behind the `capi` Cargo feature.
@@ -50,6 +52,10 @@ pub use additive::AdditiveSurrogate;
 pub use autodiff::{DualField, ForwardAd};
 pub use bounds::Bounds;
 pub use error::Error;
+pub use fallible::{
+    NanOnError, PanicOnError, TryDifferentiableObjective, TryFiniteDiffGradient, TryGradient,
+    TryObjective, TryOracle, try_eval_batch_parallel,
+};
 pub use features::{BoxGeometry, box_geometry, compensated_delta, isotropic_proposal_scale};
 pub use fpair::FPair;
 pub use gle::{GleThermostat, OPTIMAL_SAMPLING_NS, ldl_sqrt, matrix_exp, optimal_sampling_drift};
