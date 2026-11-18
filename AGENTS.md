@@ -150,7 +150,7 @@ C (see `skills/eindir-c-abi/`):
 
 - Without the `capi` feature the library exports no `eindir_` symbols.
   cargo-c enables it by itself.
-- A program linked against `target/<triple>/release` from `cargo cbuild` fails to start: the library's soname is `libeindir_core.so.0.7` and no file of that name is there.
+- A program linked against `target/<triple>/release` from `cargo cbuild` fails to start: the library's soname is `libeindir_core.so.0.8` and no file of that name is there.
   Install with `cargo cinstall` and link the prefix.
 - Ubuntu's `libdlpack-dev` is DLPack 0.6, which lacks `DLManagedTensorVersioned`.
   Use the v1.0 headers pinned in `ci.yml`.
@@ -168,7 +168,7 @@ Repository:
 
 Releases and the site, as of 2026-11-03:
 
-- `Cargo.toml` on main says 0.7.0, crates.io has 0.6.0, PyPI has 0.5.1 and the newest git tag is v0.5.2.
+- `Cargo.toml` on main says 0.8.0, crates.io has 0.6.0, PyPI has 0.5.1 and the newest git tag is v0.5.2.
   Check `cargo info eindir-core` and `pip index versions eindir` before relying on a released feature.
 - The HTML pages of [the site](https://eindir.rgoswami.me/) answer scripted clients with HTTP 403 and a challenge page.
   A path that does not exist returns the front page with status 200.

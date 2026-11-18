@@ -1,6 +1,6 @@
 ---
 name: eindir-c-abi
-description: Build and install the eindir C library, link C or C++ programs to it, and define objectives in C with DLPack 1.0 tensors that Rust drivers can call. Use when compiling against eindir-core.h or eindir-core.hpp, writing eval or gradient callbacks, embedding eindir_objective_t in another library's struct, checking ABI compatibility or semantic descriptors, or when a program fails to start because libeindir_core.so.0.7 is missing.
+description: Build and install the eindir C library, link C or C++ programs to it, and define objectives in C with DLPack 1.0 tensors that Rust drivers can call. Use when compiling against eindir-core.h or eindir-core.hpp, writing eval or gradient callbacks, embedding eindir_objective_t in another library's struct, checking ABI compatibility or semantic descriptors, or when a program fails to start because libeindir_core.so.0.8 is missing.
 license: See LICENSE in the eindir repository
 compatibility: Rust 1.88 or newer with cargo-c 0.10.17 or newer, DLPack 1.0 headers, a C99 compiler and, for the C++ example, a C++17 compiler. The script needs Python 3.11 or newer. Without DLPACK_ROOT set, it downloads the DLPack archive, so it needs network access. Tested on Linux only.
 ---
@@ -18,13 +18,13 @@ cargo install cargo-c        # once
 cargo cinstall --release --prefix="$PREFIX" --libdir=lib
 ```
 
-This installs `include/eindir-core.h`, `include/eindir-core.hpp`, `lib/libeindir_core.a`, `lib/libeindir_core.so.0.7.0` with the links `libeindir_core.so.0.7` and `libeindir_core.so`, and `lib/pkgconfig/eindir-core.pc`.
+This installs `include/eindir-core.h`, `include/eindir-core.hpp`, `lib/libeindir_core.a`, `lib/libeindir_core.so.0.8.0` with the links `libeindir_core.so.0.8` and `libeindir_core.so`, and `lib/pkgconfig/eindir-core.pc`.
 cargo-c turns on the `capi` feature by itself.
 
 - A plain `cargo build --release` builds `libeindir_core.so` with no `eindir_` symbols at all.
   Add `--features capi`.
-- `cargo cbuild --release` leaves the header and libraries under `target/<host triple>/release/`, but that `libeindir_core.so` has the soname `libeindir_core.so.0.7` and nothing of that name sits next to it.
-  A program linked there fails to start with `error while loading shared libraries: libeindir_core.so.0.7: cannot open shared object file`.
+- `cargo cbuild --release` leaves the header and libraries under `target/<host triple>/release/`, but that `libeindir_core.so` has the soname `libeindir_core.so.0.8` and nothing of that name sits next to it.
+  A program linked there fails to start with `error while loading shared libraries: libeindir_core.so.0.8: cannot open shared object file`.
   Install to a prefix, as above, or link the static archive.
 - `eindir-core.h` includes `<dlpack/dlpack.h>`, so DLPack 1.0 must be on the include path.
   Ubuntu's `libdlpack-dev` is 0.6, which has no `DLManagedTensorVersioned`.
