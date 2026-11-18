@@ -333,8 +333,10 @@ where
 /// A [`TryObjective`] and [`TryGradient`] back to [`Objective`] and
 /// [`Gradient`], panicking on a failure.
 ///
-/// For tests and scripts, where a failure is a bug. The panic message is the
-/// `Debug` form of the error.
+/// For tests and scripts, where a failure is a bug. The panic message names
+/// the call, as `objective evaluation failed`, `gradient evaluation failed`
+/// or `value and gradient evaluation failed`, and ends with the `Debug` form
+/// of the error.
 pub struct PanicOnError<O> {
     inner: O,
 }

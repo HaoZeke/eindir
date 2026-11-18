@@ -2,7 +2,7 @@
 //!
 //! `eindir_objective_t` is `#[repr(C)]` so consumers (e.g. rgpot-core) can embed
 //! it as the first member of a derived struct and cast between pointer types at
-//! zero cost -- the C "is-a" pattern. Keep non-C-ABI fields such as `Vec`,
+//! zero cost, the C "is-a" pattern. Keep non-C-ABI fields such as `Vec`,
 //! `Box`, and `OnceLock` out of this struct; use raw pointers and manage
 //! lifetimes in the corresponding constructors and destructors.
 //!
@@ -649,7 +649,7 @@ pub unsafe extern "C" fn eindir_objective_new(
             None => return std::ptr::null_mut(),
         };
 
-    // Leak the Vecs into raw pointers -- eindir_objective_free reclaims them.
+    // Leak the Vecs into raw pointers; eindir_objective_free reclaims them.
     let low = {
         let mut v = low_vec;
         let ptr = v.as_mut_ptr();
@@ -916,7 +916,7 @@ impl<'a> EindirObjectiveWrapper<'a> {
     ///
     /// # Panics
     ///
-    /// Panics when `low[i] > high[i]` for any `i`, as [`Bounds::new`].
+    /// Panics when `low[i]` exceeds `high[i]` for any `i`, as [`Bounds::new`].
     pub unsafe fn new(obj: &'a eindir_objective_t) -> Self {
         let low = unsafe { std::slice::from_raw_parts(obj.low, obj.dim) };
         let high = unsafe { std::slice::from_raw_parts(obj.high, obj.dim) };

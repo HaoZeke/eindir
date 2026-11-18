@@ -281,10 +281,12 @@ pub fn low_discrepancy_points(
     Ok(points.outer_iter().map(|row| row.to_vec()).collect())
 }
 
-/// Halton points with a seeded Cranley-Patterson shift, scaled to the box.
+/// Halton points with a seeded Cranley-Patterson shift, scaled to the box,
+/// as a list of rows.
 ///
 /// The same ``seed`` gives the same points for a given build. Arguments as
-/// in ``low_discrepancy_points``; ``seed`` defaults to 0.
+/// in ``low_discrepancy_points``; ``seed`` defaults to 0. Wrap the result in
+/// ``numpy.asarray`` for an ``(n, dims)`` array.
 ///
 /// # Errors
 ///

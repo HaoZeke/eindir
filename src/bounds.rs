@@ -38,7 +38,7 @@ where
     /// # Panics
     ///
     /// Panics when `low` and `high` differ in length, when `slack` is
-    /// negative, and when `low[i] > high[i]` for any `i`.
+    /// negative, and when `low[i]` exceeds `high[i]` for any `i`.
     ///
     /// # Examples
     ///

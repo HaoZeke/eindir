@@ -511,7 +511,7 @@ impl<'a> EindirTryObjectiveWrapper<'a> {
     ///
     /// # Panics
     ///
-    /// Panics when `low[i] > high[i]` for any `i`, as [`Bounds::new`].
+    /// Panics when `low[i]` exceeds `high[i]` for any `i`, as [`Bounds::new`].
     pub unsafe fn new(obj: &'a eindir_try_objective_t) -> Self {
         let low = unsafe { std::slice::from_raw_parts(obj.low, obj.dim) };
         let high = unsafe { std::slice::from_raw_parts(obj.high, obj.dim) };

@@ -19,6 +19,30 @@ pub trait DualField: Send + Sync {
 }
 
 /// Forward-mode AD wrapper around a [`DualField`].
+///
+/// One gradient costs one evaluation of the field at a dual type with `dim`
+/// derivative components.
+///
+/// # Examples
+///
+/// ```
+/// use eindir_core::{Bounds, DualField, ForwardAd, Gradient, Objective};
+/// use ndarray::array;
+/// use num_dual::DualNum;
+///
+/// struct Booth;
+/// impl DualField for Booth {
+///     fn eval_dual<D: DualNum<f64> + Clone>(&self, x: &[D]) -> D {
+///         let a = x[0].clone() + x[1].clone() * 2.0 - 7.0;
+///         let b = x[0].clone() * 2.0 + x[1].clone() - 5.0;
+///         a.clone() * a + b.clone() * b
+///     }
+/// }
+///
+/// let f = ForwardAd::new(Booth, Bounds::new(array![-10.0, -10.0], array![10.0, 10.0], 0.0));
+/// assert_eq!(f.eval(array![1.0, 3.0].view()), 0.0);
+/// assert_eq!(f.grad(array![0.0, 0.0].view()), array![-34.0, -38.0]);
+/// ```
 pub struct ForwardAd<S: DualField> {
     field: S,
     bounds: Bounds<f64>,

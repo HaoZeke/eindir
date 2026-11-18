@@ -9,8 +9,7 @@
 //! independence proposal exploits: each coordinate is drawn from its own 1D
 //! tempered marginal `exp(-g_j/T)/Z_j(T)` by inverse-CDF, in `O(d m)` with no
 //! curse of dimensionality, so a single draw places every coordinate at its
-//! tempered optimum at once -- the regime an active-subspace surrogate cannot
-//! reach.
+//! tempered optimum at once, which an active-subspace surrogate cannot do.
 //!
 //! Like [`crate::reduced::ChebyshevSurrogate`], the surrogate is an
 //! `Obj`-transform: it implements [`Objective`], so every point of the sampling
@@ -167,7 +166,7 @@ impl AdditiveSurrogate {
     /// under uniform sampling. Sweeping all coordinates `n_passes` times removes
     /// the finite-sample cross-coordinate contamination that an independent
     /// per-coordinate fit leaves behind, converging to the joint least-squares
-    /// additive model while staying `O(n_passes d (n degree + degree^3))` --
+    /// additive model while staying `O(n_passes d (n degree + degree^3))`,
     /// linear in `d`, unlike the joint solve. Each coordinate's Gram factor is
     /// cached, so a pass costs only one triangular solve per coordinate.
     ///

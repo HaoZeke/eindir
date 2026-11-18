@@ -141,8 +141,9 @@ class NumLimit:
 
         #### Notes
         This method generates a random point within the bounds using a uniform
-        distribution. The number of dimensions of the point is equal to the
-        `dims` attribute.
+        distribution, with a new unseeded generator on each call. The point
+        has the shape of `low` and `high`; the `dims` attribute plays no
+        part.
 
         TODO: Handle other constraints (undefined regions)
         """

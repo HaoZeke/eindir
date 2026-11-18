@@ -7,16 +7,16 @@
 //! slowly. The GLE replaces the white noise by a colored noise generated from
 //! `ns` auxiliary momenta, whose drift matrix `A` shapes a frequency-dependent
 //! friction. A well-chosen `A` makes the sampling efficiency nearly flat across
-//! a target frequency band -- "optimal sampling" -- so conditioning is handled
-//! by the noise spectrum exactly as the `1/sqrt(D)` scale handles dimension.
+//! a target frequency band ("optimal sampling"), so the noise spectrum, not
+//! the step size, absorbs the spread of curvatures.
 //!
 //! The per-step propagator follows i-PI's `ThermoGLE`: `T = exp(-dt A)`,
 //! `S S^T = k_B (C - T C T^T)`, and `s <- T s + S xi`, with `xi` standard
 //! normal and `s[0]` the physical (mass-scaled) momentum.
 //! For canonical sampling `C = temperature * I`, which makes the auxiliary
-//! process leave the Boltzmann momentum distribution invariant for ANY valid
-//! drift `A` -- the "a la carte" decoupling of correctness (set by `C`) from
-//! acceleration (set by `A`). `matrix_exp` is a Taylor scaling-and-squaring and
+//! process leave the Boltzmann momentum distribution invariant for any valid
+//! drift `A`. This is the "a la carte" decoupling of correctness (set by
+//! `C`) from acceleration (set by `A`). `matrix_exp` is a Taylor scaling-and-squaring and
 //! the noise factor is an LDL^T square root, so no linear-algebra backend is
 //! needed.
 
@@ -191,7 +191,7 @@ impl GleThermostat {
 
     /// Advance the auxiliary state one timestep in place. `s` is `(ns+1) x dim`;
     /// row 0 holds the physical (mass-scaled) momentum of each coordinate, rows
-    /// `1..=ns` the auxiliary momenta. Applies `s <- T s + S xi`, with `xi`
+    /// `1..=ns` the auxiliary momenta. Replaces `s` by `T s + S xi`, with `xi`
     /// standard normal.
     ///
     /// # Panics
@@ -240,10 +240,9 @@ impl GleThermostat {
 /// is a complex eigenvalue pair `-Gamma +/- i Omega` skew-coupled to the
 /// physical momentum, so its friction peaks near `Omega`; the frequencies,
 /// dampings and couplings were fit to maximise the worst normalised sampling
-/// efficiency `min_omega kappa(omega)/omega` across the band -- the gle4md
-/// procedure, reproduced by `anneal/experiments/colored_noise_sampling.py`. At
-/// the fitted optimum the worst efficiency is 0.13, against 0.07 for the best
-/// single white-noise friction in the companion benchmark.
+/// efficiency `min_omega kappa(omega)/omega` across the band, following the
+/// gle4md procedure. The fit is `anneal/experiments/colored_noise_sampling.py`
+/// in the anneal repository.
 const OPTIMAL_SAMPLING_REF: [(f64, f64, f64); 6] = [
     (4.008052, 90.290099, 0.833024),
     (93.560269, 37.509324, 40.162773),
@@ -266,9 +265,22 @@ pub const OPTIMAL_SAMPLING_NS: usize = 2 * OPTIMAL_SAMPLING_REF.len();
 /// momentum; the oscillator and coupling terms are skew, so `A + A^T` is
 /// diagonal and non-negative and the fluctuation-dissipation relation
 /// `A C + C A^T = B B^T` holds for `C = I` (canonical sampling). Spreading the
-/// baths across the band flattens the friction -- hence the sampling efficiency
-/// -- the colored-noise analogue of critical damping over a whole spectrum
-/// rather than at one frequency.
+/// baths across the band flattens the friction, and with it the sampling
+/// efficiency: critical damping over a band of frequencies instead of at one.
+///
+/// # Examples
+///
+/// ```
+/// use eindir_core::{OPTIMAL_SAMPLING_NS, optimal_sampling_drift};
+///
+/// let a = optimal_sampling_drift(0.5);
+/// assert_eq!(a.dim(), (OPTIMAL_SAMPLING_NS + 1, OPTIMAL_SAMPLING_NS + 1));
+/// // A + A^T is diagonal and non-negative.
+/// let sym = &a + &a.t();
+/// for ((i, j), v) in sym.indexed_iter() {
+///     assert!(if i == j { *v >= 0.0 } else { v.abs() < 1e-12 });
+/// }
+/// ```
 ///
 /// Returns an `(OPTIMAL_SAMPLING_NS + 1)` square matrix.
 ///
