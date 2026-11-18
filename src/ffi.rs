@@ -214,10 +214,10 @@ pub type EindirFreeFn = Option<unsafe extern "C" fn(*mut c_void)>;
 pub struct eindir_objective_t {
     /// Number of input dimensions.
     pub dim: usize,
-    /// Lower bounds: heap-allocated f64[dim], owned by this struct when
+    /// Lower bounds: heap-allocated `f64[dim]`, owned by this struct when
     /// created via eindir_objective_new.
     pub low: *mut f64,
-    /// Upper bounds: heap-allocated f64[dim], owned by this struct when
+    /// Upper bounds: heap-allocated `f64[dim]`, owned by this struct when
     /// created via eindir_objective_new.
     pub high: *mut f64,
     /// Value callback.  Must not be NULL.
@@ -582,7 +582,7 @@ pub unsafe extern "C" fn eindir_objective_dim(obj: *const eindir_objective_t) ->
     unsafe { (*obj).dim }
 }
 
-/// Writes the lower-bound vector into `out` (pre-allocated DLPack tensor, shape [dim]).
+/// Writes the lower-bound vector into `out` (pre-allocated DLPack tensor, shape `[dim]`).
 ///
 /// # Safety
 ///
@@ -610,7 +610,7 @@ pub unsafe extern "C" fn eindir_objective_bounds_low(
     }))
 }
 
-/// Writes the upper-bound vector into `out` (pre-allocated DLPack tensor, shape [dim]).
+/// Writes the upper-bound vector into `out` (pre-allocated DLPack tensor, shape `[dim]`).
 ///
 /// # Safety
 ///
