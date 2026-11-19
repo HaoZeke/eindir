@@ -1,20 +1,86 @@
 //! Forward-mode automatic differentiation via `num-dual`.
 //!
-//! Write the scalar field once, generic over [`num_dual::DualNum`]. This
-//! module lifts it to [`Objective`] + [`Gradient`] + [`DifferentiableObjective`]
-//! with a fused `value_and_gradient` (one dual evaluation, exact partials).
-//! Central differences stay available as [`crate::FiniteDiffGradient`] when
-//! the function cannot be instantiated at a dual type.
+//! [`Dual64`] is one real value and one directional derivative. A map
+//! `R^n -> R^m` written on it yields a Jacobian-vector product from
+//! [`directional_derivative`], with no difference step.
+//!
+//! A scalar field is written once, generic over [`DualNum`]. [`ForwardAd`]
+//! lifts that field to [`Objective`] + [`Gradient`] +
+//! [`DifferentiableObjective`] with a fused `value_and_gradient` (one
+//! [`num_dual::DualDVec64`] evaluation, the full gradient). Central
+//! differences stay available as [`crate::FiniteDiffGradient`] when the
+//! function cannot be instantiated at a dual type.
 
-use crate::{Bounds, DifferentiableObjective, Gradient, Objective};
+use crate::{Bounds, DifferentiableObjective, Error, Gradient, Objective};
 use nalgebra::DVector;
 use ndarray::{Array1, ArrayView1};
-use num_dual::{DualDVec64, DualNum, gradient};
+pub use num_dual::{Dual64, DualNum};
+use num_dual::{DualDVec64, gradient};
+
+/// Value of a map and its directional derivative along one seed.
+#[derive(Clone, Debug, PartialEq)]
+pub struct DirectionalDerivative {
+    /// Image of the map at the seeded point.
+    pub value: Vec<f64>,
+    /// Jacobian of the map at that point, times the seed direction.
+    pub derivative: Vec<f64>,
+}
+
+/// Jacobian-vector product of `map` along `direction`.
+///
+/// Each coordinate of `x` is seeded with the matching component of
+/// `direction`. The real part of `map` is [`DirectionalDerivative::value`]
+/// and the dual part is [`DirectionalDerivative::derivative`]. `map` chooses
+/// the output length; it does not have to match `x.len()`.
+///
+/// `x` must be non-empty. Every component of `x`, `direction`, and both
+/// parts of the image must be finite. An empty point or a non-finite value
+/// is [`Error::OutOfBounds`]. A length mismatch is
+/// [`Error::DimensionMismatch`]. This function does not catch a panic from
+/// `map`.
+pub fn directional_derivative<F>(
+    x: &[f64],
+    direction: &[f64],
+    map: F,
+) -> Result<DirectionalDerivative, Error>
+where
+    F: FnOnce(&[Dual64]) -> Vec<Dual64>,
+{
+    if x.is_empty() {
+        return Err(Error::OutOfBounds(String::from("empty input")));
+    }
+    if x.len() != direction.len() {
+        return Err(Error::DimensionMismatch {
+            expected: x.len(),
+            got: direction.len(),
+        });
+    }
+    if x.iter().any(|value| !value.is_finite()) || direction.iter().any(|value| !value.is_finite())
+    {
+        return Err(Error::OutOfBounds(String::from("non-finite input")));
+    }
+    let seeded: Vec<Dual64> = x
+        .iter()
+        .zip(direction.iter())
+        .map(|(&re, &eps)| Dual64::new(re, eps))
+        .collect();
+    let image = map(&seeded);
+    let mut value = Vec::with_capacity(image.len());
+    let mut derivative = Vec::with_capacity(image.len());
+    for component in image {
+        if !component.re.is_finite() || !component.eps.is_finite() {
+            return Err(Error::OutOfBounds(String::from("non-finite output")));
+        }
+        value.push(component.re);
+        derivative.push(component.eps);
+    }
+    Ok(DirectionalDerivative { value, derivative })
+}
 
 /// A scalar field `R^n -> R` written generically over dual numbers.
 pub trait DualField: Send + Sync {
     /// Evaluates `f` at `x`. Instantiated at `f64` for values and at
-    /// [`DualDVec64`] for an exact gradient in one sweep.
+    /// [`num_dual::DualDVec64`] for an exact gradient in one sweep.
     fn eval_dual<D: DualNum<f64> + Clone>(&self, x: &[D]) -> D;
 }
 
@@ -81,6 +147,108 @@ mod tests {
     use super::*;
     use crate::objectives::Rosenbrock;
     use ndarray::array;
+
+    /// Sum over `components` of `ops · ε · scale`.
+    fn summed_bar(ops: u64, scale: f64, components: usize) -> f64 {
+        ops as f64 * f64::EPSILON * scale * components as f64
+    }
+
+    fn sup_abs(values: &[f64]) -> f64 {
+        let mut scale = 0.0;
+        for value in values {
+            let magnitude = value.abs();
+            if magnitude > scale {
+                scale = magnitude;
+            }
+        }
+        scale
+    }
+
+    #[test]
+    fn scalar_sqrt_matches_the_analytic_derivative() {
+        let jet = Dual64::new(4.0, 1.0).sqrt();
+        let value_gap = (jet.re - 2.0).abs();
+        let slope_gap = (jet.eps - 0.25).abs();
+        let gap = value_gap + slope_gap;
+        // sqrt, recip, two multiplies by one half, then the chain-rule multiply.
+        let bar = summed_bar(5, sup_abs(&[jet.re, jet.eps, 2.0, 0.25]), 2);
+        assert!(gap <= bar);
+    }
+
+    #[test]
+    fn directional_derivative_matches_the_jacobian_product() {
+        let x = [4.0, 2.0];
+        let direction = [0.5, -0.25];
+        let result = directional_derivative(&x, &direction, |z| {
+            let x = z[0];
+            let y = z[1];
+            vec![x * y, x / y, x.sqrt()]
+        });
+        assert!(result.is_ok());
+        if let Ok(jet) = result {
+            let value = [8.0, 2.0, 2.0];
+            let derivative = [0.0, 0.5, 0.125];
+            let mut gap = 0.0;
+            for (got, truth) in jet.value.iter().zip(&value) {
+                gap += (got - truth).abs();
+            }
+            for (got, truth) in jet.derivative.iter().zip(&derivative) {
+                gap += (got - truth).abs();
+            }
+            let scale = sup_abs(&jet.value) + sup_abs(&jet.derivative);
+            // One product, one quotient (recip and two multiplies), one square root.
+            let bar = summed_bar(6, scale, value.len() + derivative.len());
+            assert_eq!(jet.value.len(), value.len());
+            assert_eq!(jet.derivative.len(), derivative.len());
+            assert!(gap <= bar);
+        }
+    }
+
+    #[test]
+    fn directional_derivative_rejects_a_short_direction() {
+        let result = directional_derivative(&[0.0, 1.0], &[0.0], |z| z.to_vec());
+        assert!(matches!(
+            result,
+            Err(Error::DimensionMismatch {
+                expected: 2,
+                got: 1
+            })
+        ));
+    }
+
+    fn is_out_of_bounds(result: Result<DirectionalDerivative, Error>) -> bool {
+        matches!(result, Err(Error::OutOfBounds(_)))
+    }
+
+    #[test]
+    fn directional_derivative_rejects_an_empty_point() {
+        let result = directional_derivative(&[], &[], |_| Vec::new());
+        assert!(is_out_of_bounds(result));
+    }
+
+    #[test]
+    fn directional_derivative_rejects_a_non_finite_point() {
+        let result = directional_derivative(&[f64::NAN, 1.0], &[0.0, 1.0], |z| z.to_vec());
+        assert!(is_out_of_bounds(result));
+    }
+
+    #[test]
+    fn directional_derivative_rejects_a_non_finite_direction() {
+        let result = directional_derivative(&[1.0], &[f64::INFINITY], |z| z.to_vec());
+        assert!(is_out_of_bounds(result));
+    }
+
+    #[test]
+    fn directional_derivative_rejects_a_square_root_at_zero() {
+        let result = directional_derivative(&[0.0], &[1.0], |z| vec![z[0].sqrt()]);
+        assert!(is_out_of_bounds(result));
+    }
+
+    #[test]
+    fn directional_derivative_rejects_division_by_zero() {
+        let result = directional_derivative(&[1.0, 0.0], &[1.0, 0.0], |z| vec![z[0] / z[1]]);
+        assert!(is_out_of_bounds(result));
+    }
 
     struct RosenDual;
 

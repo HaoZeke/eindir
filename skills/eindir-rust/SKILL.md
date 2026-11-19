@@ -91,7 +91,7 @@ assert_eq!(used, 2 * x.len());
 `DifferentiableObjective<T>` (an `Objective` and a `Gradient`, with `value_and_gradient`) has no blanket impl: write `impl DifferentiableObjective<f64> for MyType {}` or override `value_and_gradient` for a fused evaluation.
 The builtins `Rastrigin::<D>`, `Rosenbrock::<D>`, `Ackley::<D>` and `StybTang2D` implement all three and return their minimum from `global_min`.
 On a type with both traits `x.dim()` is ambiguous (error E0034), so write `Objective::dim(&x)`.
-The `autodiff` feature adds `ForwardAd`, which turns a `DualField` written once over `num-dual` into an objective with an exact gradient.
+The `autodiff` feature adds `Dual64`, a scalar first-order dual number, and `directional_derivative`, the Jacobian-vector product of a map `R^n -> R^m` written on it. `ForwardAd` still turns a `DualField` written once over `num-dual` into an objective with an exact gradient.
 
 ## Fallible objectives
 
@@ -160,6 +160,6 @@ The second example prints the mean squared momentum under the thermostat (close 
 
 - `capi`: the C ABI and `eindir-core.h` (see the `eindir-c-abi` skill).
 - `py-objective`, `python`: the pyo3 extension `eindir._core`.
-- `autodiff`: `ForwardAd` and `DualField` through `num-dual`.
+- `autodiff`: `Dual64`, `directional_derivative`, `ForwardAd` and `DualField` through `num-dual`.
 
 `cargo test` runs the tests of the default features, and `cargo test --all-features` runs the rest.
