@@ -7,9 +7,9 @@
 //! A scalar field is written once, generic over [`DualNum`]. [`ForwardAd`]
 //! lifts that field to [`Objective`] + [`Gradient`] +
 //! [`DifferentiableObjective`] with a fused `value_and_gradient` (one
-//! [`DualDVec64`] evaluation, the full gradient). Central differences stay
-//! available as [`crate::FiniteDiffGradient`] when the function cannot be
-//! instantiated at a dual type.
+//! [`num_dual::DualDVec64`] evaluation, the full gradient). Central
+//! differences stay available as [`crate::FiniteDiffGradient`] when the
+//! function cannot be instantiated at a dual type.
 
 use crate::{Bounds, DifferentiableObjective, Error, Gradient, Objective};
 use nalgebra::DVector;
@@ -32,6 +32,12 @@ pub struct DirectionalDerivative {
 /// `direction`. The real part of `map` is [`DirectionalDerivative::value`]
 /// and the dual part is [`DirectionalDerivative::derivative`]. `map` chooses
 /// the output length; it does not have to match `x.len()`.
+///
+/// `x` must be non-empty. Every component of `x`, `direction`, and both
+/// parts of the image must be finite. An empty point or a non-finite value
+/// is [`Error::OutOfBounds`]. A length mismatch is
+/// [`Error::DimensionMismatch`]. This function does not catch a panic from
+/// `map`.
 pub fn directional_derivative<F>(
     x: &[f64],
     direction: &[f64],
@@ -40,11 +46,18 @@ pub fn directional_derivative<F>(
 where
     F: FnOnce(&[Dual64]) -> Vec<Dual64>,
 {
+    if x.is_empty() {
+        return Err(Error::OutOfBounds(String::from("empty input")));
+    }
     if x.len() != direction.len() {
         return Err(Error::DimensionMismatch {
             expected: x.len(),
             got: direction.len(),
         });
+    }
+    if x.iter().any(|value| !value.is_finite()) || direction.iter().any(|value| !value.is_finite())
+    {
+        return Err(Error::OutOfBounds(String::from("non-finite input")));
     }
     let seeded: Vec<Dual64> = x
         .iter()
@@ -55,6 +68,9 @@ where
     let mut value = Vec::with_capacity(image.len());
     let mut derivative = Vec::with_capacity(image.len());
     for component in image {
+        if !component.re.is_finite() || !component.eps.is_finite() {
+            return Err(Error::OutOfBounds(String::from("non-finite output")));
+        }
         value.push(component.re);
         derivative.push(component.eps);
     }
@@ -64,7 +80,7 @@ where
 /// A scalar field `R^n -> R` written generically over dual numbers.
 pub trait DualField: Send + Sync {
     /// Evaluates `f` at `x`. Instantiated at `f64` for values and at
-    /// [`DualDVec64`] for an exact gradient in one sweep.
+    /// [`num_dual::DualDVec64`] for an exact gradient in one sweep.
     fn eval_dual<D: DualNum<f64> + Clone>(&self, x: &[D]) -> D;
 }
 
@@ -200,16 +216,38 @@ mod tests {
         ));
     }
 
+    fn is_out_of_bounds(result: Result<DirectionalDerivative, Error>) -> bool {
+        matches!(result, Err(Error::OutOfBounds(_)))
+    }
+
     #[test]
-    fn directional_derivative_of_an_empty_map_is_empty() {
+    fn directional_derivative_rejects_an_empty_point() {
         let result = directional_derivative(&[], &[], |_| Vec::new());
-        assert!(matches!(
-            result,
-            Ok(DirectionalDerivative {
-                ref value,
-                ref derivative,
-            }) if value.is_empty() && derivative.is_empty()
-        ));
+        assert!(is_out_of_bounds(result));
+    }
+
+    #[test]
+    fn directional_derivative_rejects_a_non_finite_point() {
+        let result = directional_derivative(&[f64::NAN, 1.0], &[0.0, 1.0], |z| z.to_vec());
+        assert!(is_out_of_bounds(result));
+    }
+
+    #[test]
+    fn directional_derivative_rejects_a_non_finite_direction() {
+        let result = directional_derivative(&[1.0], &[f64::INFINITY], |z| z.to_vec());
+        assert!(is_out_of_bounds(result));
+    }
+
+    #[test]
+    fn directional_derivative_rejects_a_square_root_at_zero() {
+        let result = directional_derivative(&[0.0], &[1.0], |z| vec![z[0].sqrt()]);
+        assert!(is_out_of_bounds(result));
+    }
+
+    #[test]
+    fn directional_derivative_rejects_division_by_zero() {
+        let result = directional_derivative(&[1.0, 0.0], &[1.0, 0.0], |z| vec![z[0] / z[1]]);
+        assert!(is_out_of_bounds(result));
     }
 
     struct RosenDual;
