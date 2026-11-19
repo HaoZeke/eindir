@@ -53,7 +53,9 @@ pub mod types;
 
 pub use additive::AdditiveSurrogate;
 #[cfg(feature = "autodiff")]
-pub use autodiff::{DualField, ForwardAd};
+pub use autodiff::{
+    DirectionalDerivative, Dual64, DualField, DualNum, ForwardAd, directional_derivative,
+};
 pub use bounds::Bounds;
 pub use error::Error;
 pub use fallible::{

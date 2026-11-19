@@ -13,7 +13,7 @@ The anneal optimiser is built on it.
 - Objectives within box bounds: `Objective<T>` over `Bounds<T>`, with `eval`, `eval_batch`, and `eval_batch_parallel`, which uses rayon from `EVAL_BATCH_PARALLEL_MIN` points up.
 - Halton point sets: `low_discrepancy_points`, `shifted_low_discrepancy_points`, `boundary_anchored_low_discrepancy_points`, `halton_points`, `halton_unit`.
 - Fallible evaluation: `TryObjective<T>`, `TryGradient<T>` and `TryDifferentiableObjective<T>` with an associated error type that passes through unchanged. Every `Objective` and `Gradient` is one with `Error = Infallible`. The adapters are `NanOnError`, `PanicOnError`, `TryOracle`, `TryFiniteDiffGradient` and `try_eval_batch_parallel`.
-- Gradients: the `Gradient<T>` trait, `AnalyticGradient`, `FiniteDiffGradient`, `DifferentiableObjective` and, with the `autodiff` feature, `ForwardAd`.
+- Gradients: the `Gradient<T>` trait, `AnalyticGradient`, `FiniteDiffGradient`, `DifferentiableObjective` and, with the `autodiff` feature, scalar `Dual64`, `directional_derivative` and `ForwardAd`.
 - A thermostat for the generalized Langevin equation (GLE): `GleThermostat`, `optimal_sampling_drift`, `matrix_exp`, `ldl_sqrt`.
 - Surrogates: `AdditiveSurrogate`, `ChebyshevSurrogate`, `ReducedObjective`.
 - Test functions: `Rastrigin`, `Rosenbrock`, `Ackley`, `StybTang2D`.
