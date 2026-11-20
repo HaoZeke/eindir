@@ -1191,7 +1191,9 @@ Python, each reproduced by `skills/eindir-python/scripts/pitfalls.py`:
 - Read the version from `eindir._core.__version__`, since `eindir.__version__` does not exist.
 - `_core` takes contiguous float64 NumPy arrays only: lists, integer arrays and strided views raise TypeError.
 - Rust panics reach Python as `pyo3_runtime.PanicException`, which derives from BaseException, so `except Exception` misses it.
-  Three calls panic: `_core.Bounds` with `low > high`, `Bounds.clip` with a point of the wrong length, and a `PyObjective` called from another thread.
+  Two calls panic: `Bounds.clip` with a point of the wrong length, and a `PyObjective` called from another thread.
+  `_core.Bounds` raises ValueError for `low > high`, for a slack that is negative or not a number, and for a coordinate that is not a number.
+  `_core.low_discrepancy_points` and `_core.shifted_low_discrepancy_points` raise ValueError for `low > high` and for a coordinate that is not a number.
 - eindir 0.5.1 from PyPI does not check bounds: `_core.Bounds` accepts `low > high`, and `contains` and `clip` look only at the coordinates the point has.
   The checks came in 0.6.0.
 - `PyObjective.eval` does not check the length of the point, and `PyObjective.grad` without `grad_fn` raises ValueError.
@@ -1204,7 +1206,8 @@ Rust (see `skills/eindir-rust/`):
 - `FiniteDiffGradient` uses central differences with `h = 1e-5`, 2·dim evaluations per gradient.
 - On a type that implements both `Objective` and `Gradient`, `x.dim()` is ambiguous (E0034), so write `Objective::dim(&x)`.
 - `DifferentiableObjective` has no blanket impl, so add an empty `impl DifferentiableObjective<f64> for T {}`.
-- `Bounds::new` panics on lengths that differ, on a negative slack and on `low > high`.
+- `Bounds::new` panics on lengths that differ, on a slack that is negative or not a number, on a coordinate that is not a number, and on `low > high`.
+  `Bounds::try_new` returns `BoundsError` for the same inputs.
   `mkpoint` panics when a coordinate has `low == high`.
 - Do not implement `TryObjective` or `TryGradient` by hand for a type that implements `Objective` or `Gradient`: the blanket impls already cover it, and a second impl is E0119.
  Their methods are `dims`, `domain` and `grad_dims`, so that `x.dim()` stays unambiguous, and the gradient's error is `GradError`, so that `O::Error` is unambiguous under `TryDifferentiableObjective`.
@@ -1718,10 +1721,10 @@ Its minimum is about -39.166 per coordinate, at -2.9035 in each.
   A strided view such as `a[:, 0]` raises TypeError ("The given array is not contiguous").
   Use `np.ascontiguousarray(x, dtype=np.float64)`.
   `eindir.low_discrepancy_points` converts lists for you.
-- `_core.Bounds` with any `low[i] > high[i]`, and `Bounds.clip` with a point of the wrong length, raise `pyo3_runtime.PanicException`.
+- `_core.Bounds` raises ValueError when any `low[i] > high[i]`, when `slack` is negative or not a number, or when a coordinate is not a number.
+  `Bounds.clip` with a point of the wrong length raises `pyo3_runtime.PanicException`.
   It derives from BaseException, so `except Exception` does not catch it, and Rust prints the panic to stderr first.
-  Check the inputs before the call.
-  `_core.low_discrepancy_points` raises ValueError for the same inverted bounds.
+  `_core.low_discrepancy_points` and `_core.shifted_low_discrepancy_points` raise ValueError for the same inverted bounds and for a coordinate that is not a number.
 - eindir 0.5.1 from PyPI predates those checks, which came in 0.6.0.
   Its `Bounds` accepts `low > high`, and `contains` and `clip` look only at the coordinates the point has.
   A short point is judged or clipped on those alone, and a long one raises PanicException with `ndarray: index out of bounds`.
@@ -1799,7 +1802,8 @@ impl Objective<f64> for ShiftedSphere {
 ```
 
 The trait requires `bounds` to return a `Bounds<T>`.
-`Bounds::new(low, high, slack)` panics when the lengths differ, when `slack` is negative or when any `low[i] > high[i]`.
+`Bounds::new(low, high, slack)` panics when the lengths differ, when `slack` is negative or not a number, when a coordinate is not a number, or when any `low[i] > high[i]`.
+`Bounds::try_new` returns `BoundsError` for the same inputs.
 `contains` allows `slack` beyond each face and returns false for a point of the wrong length, and `clip` panics on one.
 `mkpoint` (uniform sampling) panics on a coordinate with `low[i] == high[i]`.
 

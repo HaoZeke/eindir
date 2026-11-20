@@ -1,6 +1,7 @@
 """Round-trip tests for the eindir._core PyObjective / Bounds / FPair classes."""
 
 import numpy as np
+import pytest
 import eindir
 from eindir import _core as core
 
@@ -41,3 +42,17 @@ def test_py_objective_bounds_round_trip():
     b = obj.bounds
     assert b.dims == 2
     assert abs(b.slack - 1e-3) < 1e-9
+
+
+def test_bounds_refuses_what_it_cannot_build_with_a_value_error():
+    ok = np.array([0.0, 0.0])
+    cases = [
+        (ok, np.array([1.0]), 1e-6, "different shapes"),
+        (np.array([1.0, 0.0]), np.array([0.0, 1.0]), 1e-6, r"low\[0\]"),
+        (ok, np.array([1.0, 1.0]), -1.0, "slack"),
+        (ok, np.array([1.0, 1.0]), float("nan"), "slack"),
+        (np.array([0.0, np.nan]), np.array([1.0, 1.0]), 1e-6, "numbers"),
+    ]
+    for low, high, slack, message in cases:
+        with pytest.raises(ValueError, match=message):
+            core.Bounds(low, high, slack)

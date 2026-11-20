@@ -50,7 +50,8 @@ impl Objective<f64> for ShiftedSphere {
 ```
 
 The trait requires `bounds` to return a `Bounds<T>`.
-`Bounds::new(low, high, slack)` panics when the lengths differ, when `slack` is negative or when any `low[i] > high[i]`.
+`Bounds::new(low, high, slack)` panics when the lengths differ, when `slack` is negative or not a number, when a coordinate is not a number, or when any `low[i] > high[i]`.
+`Bounds::try_new` returns `BoundsError` for the same inputs.
 `contains` allows `slack` beyond each face and returns false for a point of the wrong length, and `clip` panics on one.
 `mkpoint` (uniform sampling) panics on a coordinate with `low[i] == high[i]`.
 

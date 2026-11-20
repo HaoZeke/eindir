@@ -129,10 +129,10 @@ Its minimum is about -39.166 per coordinate, at -2.9035 in each.
   A strided view such as `a[:, 0]` raises TypeError ("The given array is not contiguous").
   Use `np.ascontiguousarray(x, dtype=np.float64)`.
   `eindir.low_discrepancy_points` converts lists for you.
-- `_core.Bounds` with any `low[i] > high[i]`, and `Bounds.clip` with a point of the wrong length, raise `pyo3_runtime.PanicException`.
+- `_core.Bounds` raises ValueError when any `low[i] > high[i]`, when `slack` is negative or not a number, or when a coordinate is not a number.
+  `Bounds.clip` with a point of the wrong length raises `pyo3_runtime.PanicException`.
   It derives from BaseException, so `except Exception` does not catch it, and Rust prints the panic to stderr first.
-  Check the inputs before the call.
-  `_core.low_discrepancy_points` raises ValueError for the same inverted bounds.
+  `_core.low_discrepancy_points` and `_core.shifted_low_discrepancy_points` raise ValueError for the same inverted bounds and for a coordinate that is not a number.
 - eindir 0.5.1 from PyPI predates those checks, which came in 0.6.0.
   Its `Bounds` accepts `low > high`, and `contains` and `clip` look only at the coordinates the point has.
   A short point is judged or clipped on those alone, and a long one raises PanicException with `ndarray: index out of bounds`.

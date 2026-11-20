@@ -53,8 +53,17 @@ if tuple(int(p) for p in _core.__version__.split(".")[:2]) >= (0, 6):
     check(
         "Bounds with low > high",
         lambda: _core.Bounds(np.array([1.0]), np.array([0.0])),
-        raises="PanicException",
-        base_exception_only=True,
+        raises="ValueError",
+    )
+    check(
+        "Bounds with a NaN slack",
+        lambda: _core.Bounds(np.array([0.0]), np.array([1.0]), float("nan")),
+        raises="ValueError",
+    )
+    check(
+        "Bounds with a NaN coordinate",
+        lambda: _core.Bounds(np.array([float("nan")]), np.array([1.0])),
+        raises="ValueError",
     )
     check(
         "Bounds.clip with the wrong length",
@@ -107,6 +116,21 @@ check("PyObjective used from another thread", eval_in_thread, raises="PanicExcep
 check(
     "_core.low_discrepancy_points with low > high",
     lambda: _core.low_discrepancy_points(np.array([1.0]), np.array([0.0]), 2),
+    raises="ValueError",
+)
+check(
+    "_core.low_discrepancy_points with a NaN bound",
+    lambda: _core.low_discrepancy_points(np.array([np.nan]), np.array([1.0]), 2),
+    raises="ValueError",
+)
+check(
+    "_core.shifted_low_discrepancy_points with low > high",
+    lambda: _core.shifted_low_discrepancy_points(np.array([1.0]), np.array([0.0]), 2),
+    raises="ValueError",
+)
+check(
+    "_core.shifted_low_discrepancy_points with a NaN bound",
+    lambda: _core.shifted_low_discrepancy_points(np.array([0.0]), np.array([np.nan]), 2),
     raises="ValueError",
 )
 check(

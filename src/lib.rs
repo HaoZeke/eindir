@@ -54,7 +54,7 @@ pub mod types;
 pub use additive::AdditiveSurrogate;
 #[cfg(feature = "autodiff")]
 pub use autodiff::{DualField, ForwardAd};
-pub use bounds::Bounds;
+pub use bounds::{Bounds, BoundsError};
 pub use error::Error;
 pub use fallible::{
     NanOnError, PanicOnError, TryDifferentiableObjective, TryFiniteDiffGradient, TryGradient,
