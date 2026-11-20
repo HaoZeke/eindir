@@ -132,6 +132,7 @@ Python, each reproduced by `skills/eindir-python/scripts/pitfalls.py`:
 - Rust panics reach Python as `pyo3_runtime.PanicException`, which derives from BaseException, so `except Exception` misses it.
   Two calls panic: `Bounds.clip` with a point of the wrong length, and a `PyObjective` called from another thread.
   `_core.Bounds` raises ValueError for `low > high`, for a slack that is negative or not a number, and for a coordinate that is not a number.
+  `_core.low_discrepancy_points` and `_core.shifted_low_discrepancy_points` raise ValueError for `low > high` and for a coordinate that is not a number.
 - eindir 0.5.1 from PyPI does not check bounds: `_core.Bounds` accepts `low > high`, and `contains` and `clip` look only at the coordinates the point has.
   The checks came in 0.6.0.
 - `PyObjective.eval` does not check the length of the point, and `PyObjective.grad` without `grad_fn` raises ValueError.

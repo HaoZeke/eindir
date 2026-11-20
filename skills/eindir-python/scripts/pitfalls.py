@@ -119,6 +119,21 @@ check(
     raises="ValueError",
 )
 check(
+    "_core.low_discrepancy_points with a NaN bound",
+    lambda: _core.low_discrepancy_points(np.array([np.nan]), np.array([1.0]), 2),
+    raises="ValueError",
+)
+check(
+    "_core.shifted_low_discrepancy_points with low > high",
+    lambda: _core.shifted_low_discrepancy_points(np.array([1.0]), np.array([0.0]), 2),
+    raises="ValueError",
+)
+check(
+    "_core.shifted_low_discrepancy_points with a NaN bound",
+    lambda: _core.shifted_low_discrepancy_points(np.array([0.0]), np.array([np.nan]), 2),
+    raises="ValueError",
+)
+check(
     "_core.low_discrepancy_points returns a list of lists",
     lambda: _core.low_discrepancy_points(low, high, 2),
     value=lambda r: isinstance(r, list) and isinstance(r[0], list),

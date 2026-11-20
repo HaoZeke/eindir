@@ -212,6 +212,19 @@ impl Gradient<f64> for PyObjective {
 
 impl DifferentiableObjective<f64> for PyObjective {}
 
+// `try_new` allows an empty box. A point set needs a dimension. Shape,
+// NaN and ordering faults use the same `BoundsError` text as `Bounds`.
+fn bounds_for_points(low: Vec<f64>, high: Vec<f64>) -> PyResult<Bounds<f64>> {
+    let bounds = Bounds::try_new(Array1::from_vec(low), Array1::from_vec(high), 0.0)
+        .map_err(|err| PyValueError::new_err(err.to_string()))?;
+    if bounds.dims == 0 {
+        return Err(PyValueError::new_err(
+            "bounds must have at least one dimension",
+        ));
+    }
+    Ok(bounds)
+}
+
 /// Low-discrepancy points scaled to the supplied box bounds.
 #[pyfunction]
 #[pyo3(signature = (low, high, n, skip = 1))]
@@ -221,24 +234,7 @@ pub fn low_discrepancy_points(
     n: usize,
     skip: u64,
 ) -> PyResult<Vec<Vec<f64>>> {
-    let low = low.as_slice()?.to_vec();
-    let high = high.as_slice()?.to_vec();
-    if low.len() != high.len() {
-        return Err(PyValueError::new_err(
-            "low and high must have the same length",
-        ));
-    }
-    if low.is_empty() {
-        return Err(PyValueError::new_err(
-            "bounds must have at least one dimension",
-        ));
-    }
-    if low.iter().zip(high.iter()).any(|(&lo, &hi)| hi < lo) {
-        return Err(PyValueError::new_err(
-            "each upper bound must be greater than or equal to the lower bound",
-        ));
-    }
-    let bounds = Bounds::new(Array1::from_vec(low), Array1::from_vec(high), 0.0);
+    let bounds = bounds_for_points(low.as_slice()?.to_vec(), high.as_slice()?.to_vec())?;
     let points = crate::pointset::low_discrepancy_points(&bounds, n, skip);
     Ok(points.outer_iter().map(|row| row.to_vec()).collect())
 }
@@ -253,24 +249,7 @@ pub fn shifted_low_discrepancy_points(
     skip: u64,
     seed: u64,
 ) -> PyResult<Vec<Vec<f64>>> {
-    let low = low.as_slice()?.to_vec();
-    let high = high.as_slice()?.to_vec();
-    if low.len() != high.len() {
-        return Err(PyValueError::new_err(
-            "low and high must have the same length",
-        ));
-    }
-    if low.is_empty() {
-        return Err(PyValueError::new_err(
-            "bounds must have at least one dimension",
-        ));
-    }
-    if low.iter().zip(high.iter()).any(|(&lo, &hi)| hi < lo) {
-        return Err(PyValueError::new_err(
-            "each upper bound must be greater than or equal to the lower bound",
-        ));
-    }
-    let bounds = Bounds::new(Array1::from_vec(low), Array1::from_vec(high), 0.0);
+    let bounds = bounds_for_points(low.as_slice()?.to_vec(), high.as_slice()?.to_vec())?;
     let points = crate::pointset::shifted_low_discrepancy_points(&bounds, n, skip, seed);
     Ok(points.outer_iter().map(|row| row.to_vec()).collect())
 }
