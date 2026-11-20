@@ -30,9 +30,9 @@ impl PyBounds {
     ) -> PyResult<Self> {
         let low = Array1::from_vec(low.as_slice()?.to_vec());
         let high = Array1::from_vec(high.as_slice()?.to_vec());
-        Ok(Self {
-            inner: Bounds::new(low, high, slack),
-        })
+        let inner = Bounds::try_new(low, high, slack)
+            .map_err(|err| PyValueError::new_err(err.to_string()))?;
+        Ok(Self { inner })
     }
 
     #[getter]
