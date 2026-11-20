@@ -130,7 +130,8 @@ Python, each reproduced by `skills/eindir-python/scripts/pitfalls.py`:
 - Read the version from `eindir._core.__version__`, since `eindir.__version__` does not exist.
 - `_core` takes contiguous float64 NumPy arrays only: lists, integer arrays and strided views raise TypeError.
 - Rust panics reach Python as `pyo3_runtime.PanicException`, which derives from BaseException, so `except Exception` misses it.
-  Three calls panic: `_core.Bounds` with `low > high`, `Bounds.clip` with a point of the wrong length, and a `PyObjective` called from another thread.
+  Two calls panic: `Bounds.clip` with a point of the wrong length, and a `PyObjective` called from another thread.
+  `_core.Bounds` raises ValueError for `low > high`, for a slack that is negative or not a number, and for a coordinate that is not a number.
 - eindir 0.5.1 from PyPI does not check bounds: `_core.Bounds` accepts `low > high`, and `contains` and `clip` look only at the coordinates the point has.
   The checks came in 0.6.0.
 - `PyObjective.eval` does not check the length of the point, and `PyObjective.grad` without `grad_fn` raises ValueError.
@@ -143,7 +144,8 @@ Rust (see `skills/eindir-rust/`):
 - `FiniteDiffGradient` uses central differences with `h = 1e-5`, 2·dim evaluations per gradient.
 - On a type that implements both `Objective` and `Gradient`, `x.dim()` is ambiguous (E0034), so write `Objective::dim(&x)`.
 - `DifferentiableObjective` has no blanket impl, so add an empty `impl DifferentiableObjective<f64> for T {}`.
-- `Bounds::new` panics on lengths that differ, on a negative slack and on `low > high`.
+- `Bounds::new` panics on lengths that differ, on a slack that is negative or not a number, on a coordinate that is not a number, and on `low > high`.
+  `Bounds::try_new` returns `BoundsError` for the same inputs.
   `mkpoint` panics when a coordinate has `low == high`.
 - Do not implement `TryObjective` or `TryGradient` by hand for a type that implements `Objective` or `Gradient`: the blanket impls already cover it, and a second impl is E0119.
  Their methods are `dims`, `domain` and `grad_dims`, so that `x.dim()` stays unambiguous, and the gradient's error is `GradError`, so that `O::Error` is unambiguous under `TryDifferentiableObjective`.
