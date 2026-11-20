@@ -121,6 +121,23 @@ mod try_new {
     }
 
     #[test]
+    fn a_nan_coordinate_is_reported_before_an_inverted_pair() {
+        assert_eq!(
+            attempt(&[f64::NAN, 2.0], &[1.0, 1.0], 0.0).unwrap_err(),
+            BoundsError::NotANumber { index: 0 }
+        );
+        // The inverted pair is first. The NaN pass still runs before it.
+        assert_eq!(
+            attempt(&[1.0, f64::NAN], &[0.0, 1.0], 0.0).unwrap_err(),
+            BoundsError::NotANumber { index: 1 }
+        );
+        assert_eq!(
+            attempt(&[f64::NAN], &[0.0], f64::NAN).unwrap_err(),
+            BoundsError::NegativeSlack
+        );
+    }
+
+    #[test]
     fn a_coordinate_that_is_not_a_number_is_refused() {
         assert_eq!(
             attempt(&[0.0, f64::NAN], &[1.0, 1.0], 0.0).unwrap_err(),

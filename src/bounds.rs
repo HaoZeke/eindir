@@ -66,6 +66,14 @@ where
     /// with `low[i] <= high[i]`, and `slack` must be a number that is not
     /// negative. Equal sides are a box of zero width in that coordinate.
     ///
+    /// The checks run in that order: one length, then `slack`, then each
+    /// coordinate is a number, then `low[i] <= high[i]`. A coordinate that
+    /// is not a number is reported even when another coordinate is inverted,
+    /// including when the inverted pair has the smaller index. A slack that
+    /// is not a number is reported before either. A comparison with NaN is
+    /// never true, so the ordering check cannot see a NaN coordinate.
+    /// Refusing it first is what makes that input an error.
+    ///
     /// Infinity is not a NaN. A positive infinite slack is accepted, and
     /// a negative infinite slack is [`BoundsError::NegativeSlack`]. An
     /// infinite coordinate is accepted when `low[i] <= high[i]` in IEEE
