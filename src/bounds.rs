@@ -7,7 +7,10 @@ use rand_distr::uniform::SampleUniform;
 use rand_distr::{Distribution, Uniform};
 
 /// Why a [`Bounds`] cannot be built from the arrays it was given.
+///
+/// Further faults may be added, so callers match with a final arm.
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
+#[non_exhaustive]
 pub enum BoundsError {
     /// `low` and `high` have different lengths.
     #[error("low and high have different shapes ({low} and {high})")]
