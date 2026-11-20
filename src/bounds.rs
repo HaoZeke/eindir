@@ -63,6 +63,13 @@ where
     /// with `low[i] <= high[i]`, and `slack` must be a number that is not
     /// negative. Equal sides are a box of zero width in that coordinate.
     ///
+    /// Infinity is not a NaN. A positive infinite slack is accepted, and
+    /// a negative infinite slack is [`BoundsError::NegativeSlack`]. An
+    /// infinite coordinate is accepted when `low[i] <= high[i]` in IEEE
+    /// order, so a side may run to `+∞`, start at `-∞`, be the whole
+    /// line, or be a single infinity. `+∞` above a finite value or above
+    /// `-∞` is [`BoundsError::Inverted`].
+    ///
     /// ```
     /// use eindir_core::{Bounds, BoundsError};
     /// use ndarray::array;
@@ -108,6 +115,12 @@ where
     }
 
     /// True if every coordinate of `x` lies within `slack` of the box.
+    ///
+    /// Membership subtracts `slack` from `low` and adds it to `high`.
+    /// A positive infinite slack on a finite face makes that side
+    /// unbounded, so every non-NaN coordinate passes. `+∞ - +∞` is NaN,
+    /// and a comparison with NaN is false, so a positive infinite slack
+    /// on a `+∞` face matches no point.
     pub fn contains(&self, x: ArrayView1<T>) -> bool {
         x.len() == self.dims
             && x.iter()
@@ -116,6 +129,11 @@ where
     }
 
     /// Draws a uniform random point inside the box.
+    ///
+    /// Panics when [`Uniform::new`] rejects an endpoint. It rejects a
+    /// zero-width coordinate and a non-finite one, so a box that
+    /// [`Bounds::try_new`] accepted with an infinite side cannot be
+    /// sampled. Slack is not used.
     pub fn mkpoint<R: Rng>(&self, rng: &mut R) -> Array1<T> {
         Array1::from_iter((0..self.dims).map(|i| {
             Uniform::new(self.low[i], self.high[i])
@@ -125,6 +143,9 @@ where
     }
 
     /// Clips each coordinate of `x` to the closed `[low, high]` interval.
+    ///
+    /// Slack is not used. A finite value on an infinite side is left as
+    /// it is, and a value past a finite face becomes that face.
     pub fn clip(&self, x: ArrayView1<T>) -> Array1<T> {
         assert_eq!(x.len(), self.dims, "point has the wrong dimension");
         Array1::from_iter(

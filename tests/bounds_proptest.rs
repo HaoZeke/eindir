@@ -77,6 +77,7 @@ fn clip_rejects_wrong_dimensions() {
 mod try_new {
     use eindir_core::{Bounds, BoundsError};
     use ndarray::Array1;
+    use rand::SeedableRng;
 
     fn attempt(low: &[f64], high: &[f64], slack: f64) -> Result<Bounds<f64>, BoundsError> {
         Bounds::try_new(
@@ -156,6 +157,92 @@ mod try_new {
                 .expect("a message");
             assert_eq!(text, message);
         }
+    }
+
+    #[test]
+    fn infinite_slack_follows_the_sign_and_not_a_nan_check() {
+        let wide = attempt(&[0.0], &[1.0], f64::INFINITY).expect("+inf slack");
+        assert_eq!(wide.slack, f64::INFINITY);
+        assert!(wide.contains(Array1::from_vec(vec![1e300]).view()));
+        assert!(wide.contains(Array1::from_vec(vec![f64::INFINITY]).view()));
+        assert!(wide.contains(Array1::from_vec(vec![f64::NEG_INFINITY]).view()));
+        assert!(!wide.contains(Array1::from_vec(vec![f64::NAN]).view()));
+        // clip ignores slack and still projects onto [low, high].
+        assert_eq!(wide.clip(Array1::from_vec(vec![5.0]).view())[0], 1.0);
+        let mut rng = rand::rngs::StdRng::seed_from_u64(1);
+        let sample = wide.mkpoint(&mut rng);
+        assert!((0.0..=1.0).contains(&sample[0]));
+
+        assert_eq!(
+            attempt(&[0.0], &[1.0], f64::NEG_INFINITY).unwrap_err(),
+            BoundsError::NegativeSlack
+        );
+
+        // +∞ - +∞ is NaN, so this face matches no point.
+        let face = attempt(&[f64::INFINITY], &[f64::INFINITY], f64::INFINITY).expect("face");
+        assert!(!face.contains(Array1::from_vec(vec![f64::INFINITY]).view()));
+        assert!(!face.contains(Array1::from_vec(vec![0.0]).view()));
+    }
+
+    #[test]
+    fn infinite_coordinates_follow_ieee_ordering() {
+        let accepted = [
+            (f64::NEG_INFINITY, f64::INFINITY),
+            (f64::NEG_INFINITY, 0.0),
+            (0.0, f64::INFINITY),
+            (f64::INFINITY, f64::INFINITY),
+            (f64::NEG_INFINITY, f64::NEG_INFINITY),
+        ];
+        for (lo, hi) in accepted {
+            let b = attempt(&[lo], &[hi], 0.0)
+                .unwrap_or_else(|err| panic!("{lo}..{hi} is a box, got {err}"));
+            assert_eq!(b.low[0], lo);
+            assert_eq!(b.high[0], hi);
+        }
+
+        let inverted = [
+            (f64::INFINITY, 0.0),
+            (0.0, f64::NEG_INFINITY),
+            (f64::INFINITY, f64::NEG_INFINITY),
+        ];
+        for (lo, hi) in inverted {
+            assert_eq!(
+                attempt(&[lo], &[hi], 0.0).unwrap_err(),
+                BoundsError::Inverted { index: 0 },
+                "{lo}..{hi}"
+            );
+        }
+
+        let whole = attempt(&[f64::NEG_INFINITY], &[f64::INFINITY], 0.0).expect("line");
+        assert!(whole.contains(Array1::from_vec(vec![3.5]).view()));
+        assert!(whole.contains(Array1::from_vec(vec![f64::INFINITY]).view()));
+        assert!(!whole.contains(Array1::from_vec(vec![f64::NAN]).view()));
+        assert_eq!(whole.clip(Array1::from_vec(vec![3.5]).view())[0], 3.5);
+        assert_eq!(
+            attempt(&[0.0], &[f64::INFINITY], 0.0)
+                .expect("unbounded above")
+                .clip(Array1::from_vec(vec![-1.0]).view())[0],
+            0.0
+        );
+    }
+
+    #[test]
+    fn mkpoint_panics_when_an_endpoint_is_not_finite() {
+        let b = attempt(&[0.0], &[f64::INFINITY], 0.0).expect("unbounded above");
+        let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let mut rng = rand::rngs::StdRng::seed_from_u64(1);
+            b.mkpoint(&mut rng)
+        }))
+        .expect_err("non-finite endpoint");
+        let text = caught
+            .downcast_ref::<String>()
+            .cloned()
+            .or_else(|| caught.downcast_ref::<&str>().map(|s| (*s).to_owned()))
+            .expect("a message");
+        assert!(
+            text.contains("low < high required for Uniform sampling"),
+            "{text}"
+        );
     }
 
     #[test]
