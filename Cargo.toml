@@ -37,9 +37,6 @@ rayon       = "1.10"
 criterion = { version = "0.6", features = ["html_reports"] }
 proptest  = "1"
 
-[build-dependencies]
-cbindgen = "0.29"
-
 [package.metadata.capi]
 min_version = "0.10.17"
 
