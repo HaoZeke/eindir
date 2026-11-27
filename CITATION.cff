@@ -1,0 +1,25 @@
+cff-version: 1.2.0
+message: If you use this software, please cite it using the metadata from this file.
+type: software
+title: eindir
+abstract: A set of "particles" or components mainly focused on working with functions in ND.
+license: MIT
+doi: 10.5281/zenodo.10672737
+repository-code: https://github.com/HaoZeke/eindir
+authors:
+  - given-names: Rohit
+    family-names: Goswami
+    email: rgoswami@ieee.org
+    affiliation: "@TheochemUI, @lab-cosmo, @metatensor"
+  - given-names: Ruhila
+    family-names: S
+    email: ruhila@ieee.org
+  - given-names: Amrita
+    family-names: Goswami
+    email: amrita@hi.is
+  - given-names: Sonaly
+    family-names: Goswami
+    email: sonaly@iitk.ac.in
+  - given-names: Debabrata
+    family-names: Goswami
+    email: dgoswami@iitk.ac.in

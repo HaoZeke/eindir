@@ -1,0 +1,1 @@
+Citation metadata and the Zenodo concept DOI are recorded in ``.zenodo.json`` and ``CITATION.cff`` at the repository root.
