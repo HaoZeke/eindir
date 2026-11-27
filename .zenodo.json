@@ -1,0 +1,13 @@
+{
+  "title": "eindir",
+  "description": "A set of \"particles\" or components mainly focused on working with functions in ND.",
+  "upload_type": "software",
+  "license": "MIT",
+  "creators": [
+    {"name": "Goswami, Rohit", "affiliation": "@TheochemUI, @lab-cosmo, @metatensor"},
+    {"name": "S, Ruhila"},
+    {"name": "Goswami, Amrita"},
+    {"name": "Goswami, Sonaly"},
+    {"name": "Goswami, Debabrata"}
+  ]
+}
