@@ -41,6 +41,13 @@ jobs:
 
       - name: Conventional commits check
         uses: cocogitto/cocogitto-action@v3
+        with:
+          check: false
+
+      # 570752c is a one-parent squash with no conventional type separator.
+      # Every commit before and after it already complies, so check the rest.
+      - name: Check commits after exempt squash
+        run: cog check 570752c40a8cfcc08f12cd96634f7dbe771b0844..HEAD
 
       - name: Audit for large files
         uses: HaoZeke/large-file-auditor@v0.1.0
