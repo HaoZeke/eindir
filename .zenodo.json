@@ -1,0 +1,13 @@
+{
+  "title": "eindir",
+  "description": "A set of \"particles\" or components mainly focused on working with functions in ND. Typed primitives for ND objective functions and bounded sampling.",
+  "upload_type": "software",
+  "license": "MIT",
+  "creators": [
+    {"name": "Goswami, Rohit"},
+    {"name": "S, Ruhila"},
+    {"name": "Goswami, Amrita"},
+    {"name": "Goswami, Sonaly"},
+    {"name": "Goswami, Debabrata"}
+  ]
+}
